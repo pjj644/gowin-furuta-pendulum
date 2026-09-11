@@ -58,7 +58,7 @@ module furuta_lqr_ctrl (
             prod2        <= dtheta    * K2;
             prod3        <= alpha_err * K3;
             prod4        <= dalpha    * K4;
-            prod5        <= alpha_int * K5;
+            prod5        <= - ($signed({{32{alpha_int[31]}}, alpha_int}) <<< 17); // K5 = -131072 = -2^17, 消除 32x32 乘法器
             stage1_valid <= 1'b1;
         end else begin
             stage1_valid <= 1'b0;
@@ -72,12 +72,21 @@ module furuta_lqr_ctrl (
     reg signed [31:0] v_cmd_q16;
     reg               stage2_valid;
 
+    wire signed [63:0] sum_prods = prod1 + prod2 + prod3 + prod4 + prod5;
+    wire signed [63:0] v_cmd_64  = - (sum_prods >>> 16);
+
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            v_cmd_q16    <= 32'd0;
+            v_cmd_q16    <= 32'sd0;
             stage2_valid <= 1'b0;
         end else if (stage1_valid) begin
-            v_cmd_q16    <= - ( (prod1 + prod2 + prod3 + prod4 + prod5) >>> 16 );
+            // 显式饱和保护与位宽截断规避 (消除 EX3791 警告与符号反转 D8)
+            if (v_cmd_64 > 64'sd13107200)        // +200V in Q16
+                v_cmd_q16 <= 32'sd13107200;
+            else if (v_cmd_64 < -64'sd13107200) // -200V in Q16
+                v_cmd_q16 <= -32'sd13107200;
+            else
+                v_cmd_q16 <= v_cmd_64[31:0];
             stage2_valid <= 1'b1;
         end else begin
             stage2_valid <= 1'b0;

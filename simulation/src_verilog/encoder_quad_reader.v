@@ -14,6 +14,7 @@ module encoder_quad_reader #(
     parameter integer CLK_FREQ_HZ   = 50_000_000, // 主系统时钟频率 (50MHz)
     parameter integer FILTER_CYCLES = 8,          // 数字滤波防抖采样阈值 (8*20ns = 160ns)
     parameter integer CPR           = 4000,       // 一整圈脉冲数 (1000线编码器 x 4倍频 = 4000 CPR)
+    parameter integer USE_Z_INDEX   = 0,          // 是否启用 Z 相零位复位功能 (D4 整改)
     parameter integer REVERSE_DIR   = 0           // 方向反转配置 (0: 正向, 1: 软反转)
 )(
     input  wire                   clk,            // 系统主时钟 (50MHz)
@@ -28,7 +29,7 @@ module encoder_quad_reader #(
     output reg  signed [31:0]     pulse_count,    // 32 位有符号绝对位置脉冲计数值
     output reg  signed [31:0]     alpha_rad_q16,  // 转臂当前角位移 (rad, Q12.16 定点数)
     output reg  signed [31:0]     dalpha_rad_s_q16,// 转臂滤波后角速度 (rad/s, Q12.16 定点数)
-    output reg  signed [15:0]     speed_pps,      // 当前瞬时脉冲速率 (Pulses Per Second)
+    output reg  signed [31:0]     speed_pps,      // 当前瞬时脉冲速率 (PPS, 扩展为 32 位防止溢出截断 D5)
     output reg                    dir_flag        // 当前旋转方向 (0: 递增/顺时针, 1: 递减/逆时针)
 );
 
@@ -125,13 +126,21 @@ module encoder_quad_reader #(
     end
 
     // -------------------------------------------------------------------------
-    // 4. 绝对脉冲累加器
     // -------------------------------------------------------------------------
+    // 4. 绝对脉冲累加器 (含 Z 相零位复位支持 D4)
+    // -------------------------------------------------------------------------
+    reg z_sync_dly;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) z_sync_dly <= 1'b0;
+        else z_sync_dly <= z_sync_reg[1];
+    end
+    wire z_rise = (z_sync_reg[1] == 1'b1) && (z_sync_dly == 1'b0);
+
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             pulse_count <= 32'sd0;
             dir_flag    <= 1'b0;
-        end else if (clear_pos) begin
+        end else if (clear_pos || (USE_Z_INDEX && z_rise)) begin
             pulse_count <= 32'sd0;
         end else begin
             if (REVERSE_DIR == 0) begin
@@ -147,34 +156,36 @@ module encoder_quad_reader #(
     end
 
     // -------------------------------------------------------------------------
-    // 5. 1ms 周期差分测速与角速度/角位移 Q12.16 定点数转换
+    // 5. 1ms 周期差分测速与角速度/角位移 Q12.16 定点数转换 (完全消除除法器 E4)
     // -------------------------------------------------------------------------
     // 换算常数解释:
     // 4000 CPR 对应 2*pi rad
-    // 1 count = 2*pi / 4000 rad
     // 定点数 Q16 放大 65536:
     // 角度换算: alpha_q16 = pulse_count * (2 * pi * 65536 / 4000)
-    // 2 * pi * 65536 = 411774.8 ~= 411775
-    // alpha_q16 = (pulse_count * 411775) / 4000;
+    // 2 * pi * 65536 / 4000 = 102.943700948
+    // 放大至 Q16: 102.943700948 * 65536 = 6746406
+    // 则: alpha_q16 = (pulse_count * 6746406) >>> 16 (完全消除 64 位除法器 E4)
     //
     // 角速度换算 (在 1ms = 0.001s 控制周期内):
-    // dalpha = delta_pulses / 0.001 * (2 * pi / 4000) = delta_pulses * (2000 * pi / 4000) = delta_pulses * (pi / 2)
-    // 定点数 Q16: (pi / 2) * 65536 = 1.5707963 * 65536 = 102943.7 ~= 102944
-    // -------------------------------------------------------------------------
-    localparam signed [31:0] K_ANGLE_NUM   = 32'sd411775;
-    localparam signed [31:0] K_ANGLE_DENOM = 32'sd4000;
-    localparam signed [31:0] K_VEL_Q16     = 32'sd102944;
+    // dalpha = delta_pulses / 0.001 * (2 * pi / 4000) = delta_pulses * (pi / 2)
+    // 定点数 Q16: (pi / 2) * 65536 = 1.5707963 * 65536 = 102944
+    //
+    // 一阶 IIR 滤波参数: dalpha = dalpha + 0.35 * (raw - dalpha)
+    // 0.35 * 65536 = 22938 (消除 32 位除法器 / 100)
+    localparam signed [31:0] K_ANGLE_Q16_SCALE = 32'sd6746406;
+    localparam signed [31:0] K_VEL_Q16         = 32'sd102944;
+    localparam signed [31:0] FILTER_ALPHA_Q16  = 32'sd22938;
 
     reg signed [31:0] pulse_count_prev;
     reg signed [31:0] delta_pulse;
     reg signed [31:0] raw_dalpha_q16;
 
-    // 一阶 IIR 滤波参数: dalpha = dalpha + alpha_filter * (raw - dalpha), alpha_filter = 0.35 (35 / 100)
-    localparam signed [31:0] FILTER_ALPHA = 32'sd35;
-
-    // 使用 64 位防溢出中间乘法节点 (避免长时转动超过 1.3 圈导致 32 位溢出卷绕)
-    wire signed [63:0] pulse_mult_64 = $signed(pulse_count) * $signed(K_ANGLE_NUM);
-    wire signed [63:0] delta_mult_64 = $signed(delta_pulse) * $signed(K_VEL_Q16);
+    // 定点高精度单周期 DSP 硬件乘法
+    wire signed [63:0] pulse_mult_64    = $signed(pulse_count) * $signed(K_ANGLE_Q16_SCALE);
+    wire signed [63:0] delta_mult_64    = $signed(delta_pulse) * $signed(K_VEL_Q16);
+    wire signed [63:0] iir_diff_mult    = $signed(delta_mult_64[31:0] - dalpha_rad_s_q16) * $signed(FILTER_ALPHA_Q16);
+    wire signed [63:0] alpha_shifted    = pulse_mult_64 >>> 16;
+    wire signed [63:0] iir_diff_shifted = iir_diff_mult >>> 16;
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -183,25 +194,23 @@ module encoder_quad_reader #(
             raw_dalpha_q16   <= 32'sd0;
             alpha_rad_q16    <= 32'sd0;
             dalpha_rad_s_q16 <= 32'sd0;
-            speed_pps        <= 16'sd0;
+            speed_pps        <= 32'sd0;
         end else if (calc_en) begin
             // 记录 1ms 内脉冲差值
             delta_pulse      <= pulse_count - pulse_count_prev;
             pulse_count_prev <= pulse_count;
 
-            // 瞬时脉冲速率 (PPS = delta_pulse * 1000)
-            speed_pps        <= delta_pulse[15:0] * 16'sd1000;
+            // 瞬时脉冲速率 (PPS = delta_pulse * 1000, 32位防溢出 D5)
+            speed_pps        <= delta_pulse * 32'sd1000;
 
-            // 1. 绝对转角位移转换为 Q12.16 (rad, 64位无溢出除法)
-            alpha_rad_q16    <= pulse_mult_64 / K_ANGLE_DENOM;
+            // 1. 绝对转角位移转换为 Q12.16 (rad, 无除法器单拍移位 E4)
+            alpha_rad_q16    <= alpha_shifted[31:0];
 
             // 2. 原始差分角速度 Q12.16 (rad/s)
             raw_dalpha_q16   <= delta_mult_64[31:0];
 
-            // 3. 一阶数字低通 IIR 滤波: 完全消除离散采样量化阶跃抖动
-            // dalpha = dalpha + ((raw_dalpha - dalpha) * 35) / 100
-            dalpha_rad_s_q16 <= dalpha_rad_s_q16 +
-                                (((delta_mult_64[31:0]) - dalpha_rad_s_q16) * FILTER_ALPHA) / 32'sd100;
+            // 3. 一阶数字低通 IIR 滤波 (乘法移位, 无除法器 E4)
+            dalpha_rad_s_q16 <= dalpha_rad_s_q16 + iir_diff_shifted[31:0];
         end
     end
 

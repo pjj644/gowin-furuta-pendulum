@@ -179,22 +179,28 @@ module angle_sensor_reader #(
     // 在 1ms 周期内: dtheta_raw = (theta_err_q16 - theta_err_prev) * 1000
     // 一阶 IIR 滤波: dtheta = dtheta + 0.35 * (dtheta_raw - dtheta)
     // -------------------------------------------------------------------------
-    localparam signed [31:0] SCALE_NUM_Q16 = 32'sd411775;
-    localparam signed [31:0] FILTER_ALPHA  = 32'sd35; // 滤波系数 35%
+    localparam signed [31:0] SCALE_NUM_Q16    = 32'sd411775;
+    localparam signed [31:0] FILTER_ALPHA_Q16 = 32'sd22938; // 滤波系数 0.35 * 65536 (消除除法器 E4)
 
     // 64 位中间乘法节点避免位宽截断与符号位混淆
-    wire signed [63:0] diff_scaled_64 = $signed({{51{diff_unwrapped[12]}}, diff_unwrapped}) * $signed(SCALE_NUM_Q16);
-    wire signed [31:0] diff_rad_q16   = diff_scaled_64 >>> 12;
+    wire signed [63:0] diff_scaled_64     = $signed({{51{diff_unwrapped[12]}}, diff_unwrapped}) * $signed(SCALE_NUM_Q16);
+    wire signed [63:0] diff_rad_shifted   = diff_scaled_64 >>> 12;
+    wire signed [31:0] diff_rad_q16       = diff_rad_shifted[31:0];
 
     reg signed [31:0] theta_prev_q16;
     reg signed [31:0] raw_dtheta_q16;
     reg signed [31:0] current_theta_q16;
+
+    wire signed [63:0] filter_diff_mult    = $signed(raw_dtheta_q16 - dtheta_q16) * $signed(FILTER_ALPHA_Q16);
+    wire signed [63:0] filter_diff_shifted = filter_diff_mult >>> 16;
+    wire signed [31:0] filter_diff_q16     = filter_diff_shifted[31:0];
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             raw_adc_data     <= 12'd0;
             theta_err_q16    <= 32'sd0;
             theta_prev_q16   <= 32'sd0;
+            raw_dtheta_q16   <= 32'sd0;
             dtheta_q16       <= 32'sd0;
             sample_done      <= 1'b0;
         end else if (process_trigger) begin
@@ -214,8 +220,8 @@ module angle_sensor_reader #(
             raw_dtheta_q16 = (current_theta_q16 - theta_prev_q16) * 32'sd1000;
             theta_prev_q16 <= current_theta_q16;
 
-            // 3. 一阶低通 IIR 硬件滤波器，滤除 ADC LSB 量化抖动
-            dtheta_q16     <= dtheta_q16 + (((raw_dtheta_q16 - dtheta_q16) * FILTER_ALPHA) / 32'sd100);
+            // 3. 一阶低通 IIR 硬件滤波器 (乘法移位, 消除运行时除法器 E4)
+            dtheta_q16     <= dtheta_q16 + filter_diff_q16;
         end else begin
             sample_done    <= 1'b0;
         end

@@ -46,7 +46,11 @@ module motor_pwm_driver #(
     reg                   dir_reg;
     reg                   pwm_active;
 
-    assign stby_out = motor_en; // 待机使能与系统使能直接绑定
+    // TB6612FNG 待机使能逻辑:
+    // 当系统使能时 (motor_en=1) 置 1 正常运行;
+    // 当停机 (motor_en=0) 且要求动态能耗制动时 (brake_mode=1), 必须保持 STBY=1, 使得 IN1=IN2=1 短路刹车生效;
+    // 仅在停机且选择自由滑行 (brake_mode=0) 时拉低 STBY=0 进入高阻待机状态。
+    assign stby_out = motor_en | brake_mode;
 
     // -------------------------------------------------------------------------
     // 1. 输入占空比预处理与限幅 (去除负号，提取方向)
@@ -60,9 +64,12 @@ module motor_pwm_driver #(
                                    ((duty_clamped + DEAD_BAND_VAL > DUTY_MAX_VAL) ?
                                     DUTY_MAX_VAL : (duty_clamped + DEAD_BAND_VAL));
 
-    // 计算实际比较门限值: compare = (duty_compensated * TIMER_PERIOD) / DUTY_MAX_VAL
-    // 在 50MHz / 20kHz 下: compare = (duty_compensated * 2500) / 1000 = (duty_compensated * 5) / 2
-    wire [31:0] raw_compare = (duty_compensated * TIMER_PERIOD) / DUTY_MAX_VAL;
+    // 计算实际比较门限值: 消除硬件运行时除法器 (E4 整改)
+    // 采用编译期常数 Q16 比例系数 SCALE_Q16 = (TIMER_PERIOD * 65536) / DUTY_MAX_VAL
+    // 在 50MHz / 20kHz (TIMER_PERIOD=2500, DUTY_MAX=1000) 下, SCALE_Q16 = 163840 (即精准 2.5)
+    localparam [31:0] SCALE_FACTOR_Q16 = (TIMER_PERIOD * 65536) / DUTY_MAX_VAL;
+    wire [31:0] compare_mult = duty_compensated * SCALE_FACTOR_Q16;
+    wire [31:0] raw_compare  = compare_mult >> 16;
 
     // -------------------------------------------------------------------------
     // 2. 无毛刺影子寄存器更新 (在 PWM 周期归零时刻同步更新比较阈值)
