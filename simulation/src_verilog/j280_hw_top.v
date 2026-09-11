@@ -209,7 +209,7 @@ module j280_hw_top #(
         .enc_b_raw     (enc_b),
         .enc_z_raw     (enc_z),
         .clear_pos      (clear_pos_pulse),
-        .calc_en        (calc_en_pulse),
+        .calc_en        (sample_done),       // 修复 F9: 统一由 sample_done 触发，严格与角度采样对齐
         .pulse_count    (pulse_count),
         .alpha_rad_q16  (alpha_rad_q16),
         .dalpha_rad_s_q16(dalpha_rad_s_q16),
@@ -223,10 +223,11 @@ module j280_hw_top #(
     wire soft_limit_err = (alpha_rad_q16 > ARM_SOFT_LIMIT_Q16) || (alpha_rad_q16 < -ARM_SOFT_LIMIT_Q16);
 
     // -------------------------------------------------------------------------
-    // 7. 例化: 定点与正弦轨迹发生器 (P2 / 拓展要求 1 & 2)
+    // 7. 例化: 定点与正弦轨迹发生器 (P2 / 拓展要求 1 & 2 / F8 平滑与同步)
     // -------------------------------------------------------------------------
     wire signed [31:0] alpha_ref_q16;
     wire signed [31:0] dalpha_ref_q16;
+    wire               traj_sync_pulse;
 
     traj_gen #(
         .CLK_FREQ_HZ(50_000_000),
@@ -235,6 +236,7 @@ module j280_hw_top #(
         .clk          (clk_50m),
         .rst_n        (rst_n),
         .calc_en      (sample_done),
+        .sync_phase   (traj_sync_pulse),    // 修复 F8: 平衡切入瞬间复位正弦相位
         .mode_sel     (traj_mode),
         .alpha_ref_q16(alpha_ref_q16),
         .dalpha_ref_q16(dalpha_ref_q16)
@@ -257,6 +259,7 @@ module j280_hw_top #(
 
     wire signed [15:0] swing_pwm_duty;
     wire               swing_calc_done;
+    wire               swing_energy_deficit;
 
     wire signed [15:0] lqr_pwm_duty;
     wire               lqr_calc_done;
@@ -295,7 +298,7 @@ module j280_hw_top #(
     end
 
     // -------------------------------------------------------------------------
-    // 10. 例化: 起摆能量泵控制器 (P1)
+    // 10. 例化: 起摆能量泵控制器 (P1 / F1 / F2 / F3 / F4)
     // -------------------------------------------------------------------------
     swing_up_ctrl u_swing_ctrl (
         .clk             (clk_50m),
@@ -306,17 +309,17 @@ module j280_hw_top #(
         .alpha_rad_q16   (alpha_rad_q16),
         .dalpha_rad_s_q16(dalpha_rad_s_q16),
         .pwm_swing_duty  (swing_pwm_duty),
-        .energy_deficit  (),
+        .energy_deficit  (swing_energy_deficit), // 修复 F2: 引出机械能指示
         .calc_done       (swing_calc_done)
     );
 
     // -------------------------------------------------------------------------
-    // 11. 例化: LQR / LQI 定点数硬件乘加流水线计算核 (D8 饱和与位宽规整)
+    // 11. 例化: LQR / LQI 定点数硬件乘加流水线计算核 (F7: 常开计算消除捕获空窗)
     // -------------------------------------------------------------------------
     furuta_lqr_ctrl u_lqr_core (
         .clk        (clk_50m),
         .rst_n      (rst_n),
-        .calc_en    (sample_done && lqr_en),
+        .calc_en    (sample_done),               // 修复 F7: 去掉 && lqr_en，常开流水，切入瞬间当拍即可输出有效占空比
         .theta_err  (theta_err_q16),
         .dtheta     (dtheta_q16),
         .alpha_err  (alpha_err_q16),
@@ -327,7 +330,7 @@ module j280_hw_top #(
     );
 
     // -------------------------------------------------------------------------
-    // 12. 例化: 四态主控制状态机 (P1 / 解决起摆与跌落自锁冲突)
+    // 12. 例化: 四态主控制状态机 (P1 / F5 / F6 / F8)
     // -------------------------------------------------------------------------
     ctrl_fsm u_ctrl_fsm (
         .clk                 (clk_50m),
@@ -343,6 +346,7 @@ module j280_hw_top #(
         .current_state       (fsm_state),
         .final_pwm_duty      (final_pwm_duty),
         .reset_integral_pulse(reset_integral_pulse),
+        .traj_sync_pulse     (traj_sync_pulse),  // 修复 F8: 捕获切入瞬间同步轨迹发生器
         .is_in_balance_zone  (is_in_balance_zone),
         .lqr_en              (lqr_en),
         .swing_en            (swing_en),

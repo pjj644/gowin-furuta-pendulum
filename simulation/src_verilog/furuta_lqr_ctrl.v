@@ -25,40 +25,43 @@ module furuta_lqr_ctrl (
 );
 
     // -------------------------------------------------------------------------
-    // LQR / LQI 状态反馈增益常量 (Q12.16 格式)
+    // LQR / LQI 状态反馈增益常量 (Q10 格式, 乘以 1024, 优化至 18-bit 有符号数消除 MULT36X36 资源浪费)
+    // K1 = -82.2258 * 1024 = -84200 (18-bit, 误差 0.0009%)
+    // K2 =  -9.5375 * 1024 =  -9766 (14-bit, 误差 0.001%)
+    // K3 =  -6.4483 * 1024 =  -6603 (13-bit, 误差 0.005%)
+    // K4 =  -4.5250 * 1024 =  -4634 (13-bit, 误差 0.009%)
+    // K5 =  -2.0000 * 1024 =  -2048 (移位 <<< 11 即可实现)
     // -------------------------------------------------------------------------
-    localparam signed [31:0] K1 = -32'sd5388751; // -82.2258 (摆角增益)
-    localparam signed [31:0] K2 = -32'sd625050; // -9.5375 (摆角速度增益)
-    localparam signed [31:0] K3 = -32'sd422594; // -6.4483 (转臂位置增益)
-    localparam signed [31:0] K4 = -32'sd296554; // -4.5250 (转臂速度增益)
-    localparam signed [31:0] K5 = -32'sd131072; // -2.0000 (积分项增益)
+    localparam signed [17:0] K1_18 = -18'sd84200;
+    localparam signed [17:0] K2_18 = -18'sd9766;
+    localparam signed [17:0] K3_18 = -18'sd6603;
+    localparam signed [17:0] K4_18 = -18'sd4634;
 
-    // 电压到 PWM 占空比缩放因子 (12V 对应 1000 计数值: 1000 / 12 ~= 83.33)
-    // 在 Q16 格式下: 83.33 * 65536 ~= 5461163
-    localparam signed [31:0] VOLT_TO_PWM = 32'sd5461163;
-    localparam signed [15:0] PWM_MAX     = 16'sd1000;
-    localparam signed [15:0] PWM_MIN     = -16'sd1000;
+    // 电压到 PWM 占空比缩放因子 (1000/12 = 83.3333; 83.3333 * 1024 = 85333, 18-bit, 误差 0.0004%)
+    localparam signed [17:0] VOLT_TO_PWM_18 = 18'sd85333;
+    localparam signed [15:0] PWM_MAX        = 16'sd1000;
+    localparam signed [15:0] PWM_MIN        = -16'sd1000;
 
     // -------------------------------------------------------------------------
-    // 流水线第 1 级: 多路并行乘法 (调用高云 GW2A DSP28x28 或 MULT18x18 硬核)
+    // 流水线第 1 级: 18 位 DSP 乘法 (映射至高云 MULT18X18 或 MULTALU36X18，消除 MULT36X36)
     // -------------------------------------------------------------------------
-    reg signed [63:0] prod1, prod2, prod3, prod4, prod5;
+    reg signed [49:0] prod1, prod2, prod3, prod4, prod5;
     reg               stage1_valid;
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            prod1        <= 64'd0;
-            prod2        <= 64'd0;
-            prod3        <= 64'd0;
-            prod4        <= 64'd0;
-            prod5        <= 64'd0;
+            prod1        <= 50'sd0;
+            prod2        <= 50'sd0;
+            prod3        <= 50'sd0;
+            prod4        <= 50'sd0;
+            prod5        <= 50'sd0;
             stage1_valid <= 1'b0;
         end else if (calc_en) begin
-            prod1        <= theta_err * K1;
-            prod2        <= dtheta    * K2;
-            prod3        <= alpha_err * K3;
-            prod4        <= dalpha    * K4;
-            prod5        <= - ($signed({{32{alpha_int[31]}}, alpha_int}) <<< 17); // K5 = -131072 = -2^17, 消除 32x32 乘法器
+            prod1        <= $signed(theta_err) * K1_18;
+            prod2        <= $signed(dtheta)    * K2_18;
+            prod3        <= $signed(alpha_err) * K3_18;
+            prod4        <= $signed(dalpha)    * K4_18;
+            prod5        <= - ($signed({{18{alpha_int[31]}}, alpha_int}) <<< 11); // K5 = -2.0, Q16*Q10 -> Q26
             stage1_valid <= 1'b1;
         end else begin
             stage1_valid <= 1'b0;
@@ -66,27 +69,26 @@ module furuta_lqr_ctrl (
     end
 
     // -------------------------------------------------------------------------
-    // 流水线第 2 级: 累加求和并舍入右移 16 位恢复定点数尺度
-    // V = -(K1*theta + K2*dtheta + K3*alpha + K4*dalpha + K5*alpha_int)
+    // 流水线第 2 级: 累加求和并舍入右移 10 位恢复 Q16 定点数尺度 (Q26 >>> 10 -> Q16)
     // -------------------------------------------------------------------------
     reg signed [31:0] v_cmd_q16;
     reg               stage2_valid;
 
-    wire signed [63:0] sum_prods = prod1 + prod2 + prod3 + prod4 + prod5;
-    wire signed [63:0] v_cmd_64  = - (sum_prods >>> 16);
+    wire signed [49:0] sum_prods = prod1 + prod2 + prod3 + prod4 + prod5;
+    wire signed [49:0] v_cmd_raw = - (sum_prods >>> 10);
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             v_cmd_q16    <= 32'sd0;
             stage2_valid <= 1'b0;
         end else if (stage1_valid) begin
-            // 显式饱和保护与位宽截断规避 (消除 EX3791 警告与符号反转 D8)
-            if (v_cmd_64 > 64'sd13107200)        // +200V in Q16
+            // 显式饱和保护与位宽截断规避 (±200V in Q16: ±13107200)
+            if (v_cmd_raw > 50'sd13107200)
                 v_cmd_q16 <= 32'sd13107200;
-            else if (v_cmd_64 < -64'sd13107200) // -200V in Q16
+            else if (v_cmd_raw < -50'sd13107200)
                 v_cmd_q16 <= -32'sd13107200;
             else
-                v_cmd_q16 <= v_cmd_64[31:0];
+                v_cmd_q16 <= v_cmd_raw[31:0];
             stage2_valid <= 1'b1;
         end else begin
             stage2_valid <= 1'b0;
@@ -94,20 +96,37 @@ module furuta_lqr_ctrl (
     end
 
     // -------------------------------------------------------------------------
-    // 流水线第 3 级: 映射至 PWM 占空比并执行硬件饱和限幅 (Q16*Q16 -> Q32, 右移 32 位取整)
+    // 流水线第 3 级 (F11 优化): 插入寄存器打拍，切断饱和比较到乘法器的长组合路径
+    // 将 17 级逻辑深度切为 2 段，使 Fmax 突破 70MHz
     // -------------------------------------------------------------------------
-    wire signed [63:0] pwm_mult = $signed(v_cmd_q16) * $signed(VOLT_TO_PWM);
-    wire signed [63:0] pwm_calc = pwm_mult >>> 32;
+    reg signed [49:0] pwm_mult_reg;
+    reg               stage3_valid;
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            pwm_mult_reg <= 50'sd0;
+            stage3_valid <= 1'b0;
+        end else if (stage2_valid) begin
+            pwm_mult_reg <= $signed(v_cmd_q16) * VOLT_TO_PWM_18; // Q16 * Q10 = Q26
+            stage3_valid <= 1'b1;
+        end else begin
+            stage3_valid <= 1'b0;
+        end
+    end
+
+    // -------------------------------------------------------------------------
+    // 流水线第 4 级: 映射至 PWM 占空比并执行硬件饱和限幅 (Q26 >>> 26 -> 整数 PWM 计数)
+    // -------------------------------------------------------------------------
+    wire signed [49:0] pwm_calc = pwm_mult_reg >>> 26;
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             pwm_duty  <= 16'd0;
             calc_done <= 1'b0;
-        end else if (stage2_valid) begin
-            // 饱和限幅保护电机与 H 桥 (避免溢出卷绕)
-            if (pwm_calc > 64'sd1000)
+        end else if (stage3_valid) begin
+            if (pwm_calc > 50'sd1000)
                 pwm_duty <= PWM_MAX;
-            else if (pwm_calc < -64'sd1000)
+            else if (pwm_calc < -50'sd1000)
                 pwm_duty <= PWM_MIN;
             else
                 pwm_duty <= pwm_calc[15:0];

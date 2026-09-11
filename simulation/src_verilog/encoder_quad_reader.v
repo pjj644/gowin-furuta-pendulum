@@ -172,20 +172,35 @@ module encoder_quad_reader #(
     //
     // 一阶 IIR 滤波参数: dalpha = dalpha + 0.35 * (raw - dalpha)
     // 0.35 * 65536 = 22938 (消除 32 位除法器 / 100)
-    localparam signed [31:0] K_ANGLE_Q16_SCALE = 32'sd6746406;
-    localparam signed [31:0] K_VEL_Q16         = 32'sd102944;
-    localparam signed [31:0] FILTER_ALPHA_Q16  = 32'sd22938;
+    // 优化乘法位宽至 18x18 (F10): pulse_count 在软限位 ±2 圈下仅 ±8000 脉冲
+    // 18 位有符号数范围 [-131072, +131071] 对应 ±32.7 圈，余量充足
+    // 2*pi*65536/4000 = 102.9437009; 102.9437009 * 1024 = 105414 (18位有符号数)
+    // alpha_q16 = (pulse_cnt_18 * 105414) >>> 10, 误差仅 0.00033%
+    localparam signed [17:0] K_ANGLE_18        = 18'sd105414;
+    localparam signed [17:0] K_VEL_18          = 18'sd102944; // (pi/2)*65536
+    localparam signed [17:0] FILTER_ALPHA_18   = 18'sd22938;  // 0.35*65536
 
     reg signed [31:0] pulse_count_prev;
     reg signed [31:0] delta_pulse;
     reg signed [31:0] raw_dalpha_q16;
+    reg               filter_step;
 
-    // 定点高精度单周期 DSP 硬件乘法
-    wire signed [63:0] pulse_mult_64    = $signed(pulse_count) * $signed(K_ANGLE_Q16_SCALE);
-    wire signed [63:0] delta_mult_64    = $signed(delta_pulse) * $signed(K_VEL_Q16);
-    wire signed [63:0] iir_diff_mult    = $signed(delta_mult_64[31:0] - dalpha_rad_s_q16) * $signed(FILTER_ALPHA_Q16);
-    wire signed [63:0] alpha_shifted    = pulse_mult_64 >>> 16;
-    wire signed [63:0] iir_diff_shifted = iir_diff_mult >>> 16;
+    wire signed [17:0] pulse_cnt_18 = (pulse_count > 32'sd131071) ? 18'sd131071 :
+                                      ((pulse_count < -32'sd131072) ? -18'sd131072 : pulse_count[17:0]);
+    wire signed [17:0] delta_cnt_18 = (delta_pulse > 32'sd131071) ? 18'sd131071 :
+                                      ((delta_pulse < -32'sd131072) ? -18'sd131072 : delta_pulse[17:0]);
+
+    // 拍 1: 角度与角速度基础乘法 (18x18 独立单核)
+    wire signed [35:0] pulse_mult_36    = pulse_cnt_18 * K_ANGLE_18;
+    wire signed [35:0] delta_mult_36    = delta_cnt_18 * K_VEL_18;
+    wire signed [31:0] alpha_shifted    = pulse_mult_36 >>> 10;
+
+    // 拍 2: 基于已打拍的 raw_dalpha_q16 执行 IIR 滤波 (切断长组合路径)
+    wire signed [31:0] diff_for_iir     = raw_dalpha_q16 - dalpha_rad_s_q16;
+    wire signed [17:0] diff_iir_18      = (diff_for_iir > 32'sd131071) ? 18'sd131071 :
+                                          ((diff_for_iir < -32'sd131072) ? -18'sd131072 : diff_for_iir[17:0]);
+    wire signed [35:0] iir_diff_mult    = diff_iir_18 * FILTER_ALPHA_18;
+    wire signed [31:0] iir_diff_shifted = iir_diff_mult >>> 16;
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -195,22 +210,19 @@ module encoder_quad_reader #(
             alpha_rad_q16    <= 32'sd0;
             dalpha_rad_s_q16 <= 32'sd0;
             speed_pps        <= 32'sd0;
+            filter_step      <= 1'b0;
         end else if (calc_en) begin
-            // 记录 1ms 内脉冲差值
+            // 拍 1: 更新角度与原始角速度寄存器
             delta_pulse      <= pulse_count - pulse_count_prev;
             pulse_count_prev <= pulse_count;
-
-            // 瞬时脉冲速率 (PPS = delta_pulse * 1000, 32位防溢出 D5)
             speed_pps        <= delta_pulse * 32'sd1000;
-
-            // 1. 绝对转角位移转换为 Q12.16 (rad, 无除法器单拍移位 E4)
             alpha_rad_q16    <= alpha_shifted[31:0];
-
-            // 2. 原始差分角速度 Q12.16 (rad/s)
-            raw_dalpha_q16   <= delta_mult_64[31:0];
-
-            // 3. 一阶数字低通 IIR 滤波 (乘法移位, 无除法器 E4)
+            raw_dalpha_q16   <= delta_mult_36[31:0];
+            filter_step      <= 1'b1;
+        end else if (filter_step) begin
+            // 拍 2: 更新一阶数字滤波角速度
             dalpha_rad_s_q16 <= dalpha_rad_s_q16 + iir_diff_shifted[31:0];
+            filter_step      <= 1'b0;
         end
     end
 

@@ -12,5 +12,8 @@ create_clock -name clk_50m -period 20.000 -waveform {0.000 10.000} [get_ports {c
 set_false_path -from [get_ports {rst_n}]
 set_false_path -from [get_ports {sw_motor_en sw_brake_mode key_zero_calib key_pos_clear}]
 
-// 3. 板载状态指示 LED 假路径 (人眼观察慢速显示)
+// 3. 异步传感器输入端口假路径 (F12 修复: 已在内部经过双级同步器与消抖采样)
+set_false_path -from [get_ports {enc_a enc_b enc_z adc_miso}]
+
+// 4. 板载状态指示 LED 假路径 (人眼观察慢速显示)
 set_false_path -to [get_ports {led_balance led_calib_ok led_motor_run}]

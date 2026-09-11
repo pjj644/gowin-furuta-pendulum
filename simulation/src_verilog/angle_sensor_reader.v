@@ -189,11 +189,18 @@ module angle_sensor_reader #(
 
     reg signed [31:0] theta_prev_q16;
     reg signed [31:0] raw_dtheta_q16;
-    reg signed [31:0] current_theta_q16;
+    reg               filter_step;
 
-    wire signed [63:0] filter_diff_mult    = $signed(raw_dtheta_q16 - dtheta_q16) * $signed(FILTER_ALPHA_Q16);
-    wire signed [63:0] filter_diff_shifted = filter_diff_mult >>> 16;
-    wire signed [31:0] filter_diff_q16     = filter_diff_shifted[31:0];
+    // 拍 1 组合逻辑: 角度与角速度差分解算
+    wire signed [31:0] current_theta_q16  = (INVERT_DIR == 0) ? diff_rad_q16 : (-diff_rad_q16);
+    wire signed [31:0] diff_theta_step    = current_theta_q16 - theta_prev_q16;
+    wire signed [47:0] raw_dtheta_mult    = $signed(diff_theta_step) * 32'sd1000;
+    wire signed [31:0] raw_dtheta_calc    = raw_dtheta_mult[31:0];
+
+    // 拍 2 组合逻辑: 针对已寄存的 raw_dtheta_q16 执行 IIR 滤波乘法 (彻底切断两级乘法器长路径)
+    wire signed [47:0] filter_diff_mult   = $signed(raw_dtheta_q16 - dtheta_q16) * $signed(FILTER_ALPHA_Q16);
+    wire signed [47:0] filter_diff_shift  = filter_diff_mult >>> 16;
+    wire signed [31:0] filter_diff_q16    = filter_diff_shift[31:0];
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -203,25 +210,20 @@ module angle_sensor_reader #(
             raw_dtheta_q16   <= 32'sd0;
             dtheta_q16       <= 32'sd0;
             sample_done      <= 1'b0;
+            filter_step      <= 1'b0;
         end else if (process_trigger) begin
+            // 流水拍 1: 锁存 ADC 码值并更新角度与未滤波角速度寄存器
             raw_adc_data   <= active_raw_adc;
-            sample_done    <= 1'b1;
-
-            // 1. 计算当前摆角 (Q12.16 rad)
-            if (INVERT_DIR == 0) begin
-                current_theta_q16 = diff_rad_q16;
-            end else begin
-                current_theta_q16 = -diff_rad_q16;
-            end
-
             theta_err_q16  <= current_theta_q16;
-
-            // 2. 差分估算瞬时角速度 (乘以 1000 转换为 rad/s)
-            raw_dtheta_q16 = (current_theta_q16 - theta_prev_q16) * 32'sd1000;
             theta_prev_q16 <= current_theta_q16;
-
-            // 3. 一阶低通 IIR 硬件滤波器 (乘法移位, 消除运行时除法器 E4)
+            raw_dtheta_q16 <= raw_dtheta_calc;
+            filter_step    <= 1'b1;
+            sample_done    <= 1'b0;
+        end else if (filter_step) begin
+            // 流水拍 2: 基于寄存器执行低通滤波乘法，并产生 sample_done 脉冲
             dtheta_q16     <= dtheta_q16 + filter_diff_q16;
+            filter_step    <= 1'b0;
+            sample_done    <= 1'b1;
         end else begin
             sample_done    <= 1'b0;
         end

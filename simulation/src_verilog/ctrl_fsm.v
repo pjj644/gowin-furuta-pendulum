@@ -27,6 +27,7 @@ module ctrl_fsm (
     output reg  [1:0]             current_state,        // 当前主状态
     output reg  signed [15:0]     final_pwm_duty,       // 仲裁后的最终电机输出占空比
     output reg                    reset_integral_pulse, // 切入平衡瞬间积分器清零脉冲
+    output reg                    traj_sync_pulse,      // 切入平衡瞬间轨迹相位同步脉冲 (F8)
     output wire                   is_in_balance_zone,   // 是否处于平衡区指示
     output wire                   lqr_en,               // LQR 控制使能
     output wire                   swing_en,             // 起摆控制使能
@@ -66,24 +67,28 @@ module ctrl_fsm (
             current_state        <= STATE_HANGING;
             final_pwm_duty       <= 16'sd0;
             reset_integral_pulse <= 1'b0;
+            traj_sync_pulse      <= 1'b0;
         end else if (!motor_en_sw) begin
             // 拨码开关拉低时无论何种状态立即停机归位
             current_state        <= STATE_HANGING;
             final_pwm_duty       <= 16'sd0;
             reset_integral_pulse <= 1'b0;
+            traj_sync_pulse      <= 1'b0;
         end else if (soft_limit_err) begin
             // 转臂多圈超限保护自锁 (D3)
             current_state        <= STATE_PROTECT;
             final_pwm_duty       <= 16'sd0;
             reset_integral_pulse <= 1'b0;
+            traj_sync_pulse      <= 1'b0;
         end else if (calc_en) begin
             case (current_state)
                 STATE_HANGING: begin
                     reset_integral_pulse <= 1'b0;
+                    traj_sync_pulse      <= 1'b0;
                     if (motor_en_sw && calib_done) begin
-                        // 零位已就绪且开关已打开: 启动起摆
+                        // 零位已就绪且开关已打开: 启动起摆并注入 3.0V 初始扰动脉冲 (F6: 3.0*1000/12 = 250)
                         current_state  <= STATE_SWINGUP;
-                        final_pwm_duty <= 16'sd75; // 对应 3.0V 初始扰动脉冲
+                        final_pwm_duty <= 16'sd250;
                     end else begin
                         final_pwm_duty <= 16'sd0;
                     end
@@ -95,16 +100,19 @@ module ctrl_fsm (
                         current_state        <= STATE_BALANCE;
                         final_pwm_duty       <= pwm_lqr_duty;
                         reset_integral_pulse <= 1'b1; // 清零历史积分防止积分冲量超调
+                        traj_sync_pulse      <= 1'b1; // 同步正弦轨迹发生器初始相位 (F8)
                     end else begin
                         // 起摆中: 放行大角度动力输出 (彻底解开原顶层的跌落死锁!)
                         current_state        <= STATE_SWINGUP;
                         final_pwm_duty       <= pwm_swing_duty;
                         reset_integral_pulse <= 1'b0;
+                        traj_sync_pulse      <= 1'b0;
                     end
                 end
 
                 STATE_BALANCE: begin
                     reset_integral_pulse <= 1'b0;
+                    traj_sync_pulse      <= 1'b0;
                     if (is_fall_down) begin
                         // 极端推力或失稳倾倒 (>45度): 自动回退至起摆态重新拉起
                         current_state  <= STATE_SWINGUP;
@@ -117,17 +125,25 @@ module ctrl_fsm (
                 end
 
                 STATE_PROTECT: begin
+                    // F5 严重缺陷修复: 软限位故障消除后 (操作者长按 KEY2 清零编码器) 自动恢复至待机起摆态!
+                    if (!soft_limit_err) begin
+                        current_state <= STATE_HANGING;
+                    end
                     final_pwm_duty       <= 16'sd0;
                     reset_integral_pulse <= 1'b0;
+                    traj_sync_pulse      <= 1'b0;
                 end
 
                 default: begin
-                    current_state  <= STATE_HANGING;
-                    final_pwm_duty <= 16'sd0;
+                    current_state        <= STATE_HANGING;
+                    final_pwm_duty       <= 16'sd0;
+                    reset_integral_pulse <= 1'b0;
+                    traj_sync_pulse      <= 1'b0;
                 end
             endcase
         end else begin
             reset_integral_pulse <= 1'b0;
+            traj_sync_pulse      <= 1'b0;
         end
     end
 

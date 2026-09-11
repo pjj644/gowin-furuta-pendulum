@@ -19,6 +19,7 @@ module traj_gen #(
     input  wire                   clk,              // 50MHz 系统时钟
     input  wire                   rst_n,            // 异步复位 (低有效)
     input  wire                   calc_en,          // 1ms 控制节拍脉冲
+    input  wire                   sync_phase,       // 切入平衡瞬间相位同步脉冲 (F8)
     input  wire [1:0]             mode_sel,         // 模式选择
 
     output reg  signed [31:0]     alpha_ref_q16,    // 目标位置参考 (rad, Q12.16)
@@ -32,6 +33,8 @@ module traj_gen #(
     localparam signed [31:0] NEG_45DEG_Q16  = -32'sd51472;  // -45 deg
     localparam signed [31:0] TRAJ_AMP_Q16   = 32'sd28594;   // 25 deg (0.436332 rad * 65536)
     localparam signed [31:0] TRAJ_VMAX_Q16  = 32'sd35933;   // A*2*pi*f = 0.5483 rad/s * 65536
+    localparam signed [31:0] RAMP_STEP_Q16  = 32'sd572;     // 定点平滑斜坡步进 (0.5度/ms, 90ms内平滑到45度 F8)
+    localparam signed [31:0] RAMP_VEL_Q16   = 32'sd57200;   // 对应前馈速度约 0.5 rad/s
 
     // -------------------------------------------------------------------------
     // 流水线第 1 级: 5000 拍时间累加与 LUT 索引预计算打拍
@@ -52,6 +55,10 @@ module traj_gen #(
             lut_idx_r    <= 7'd0;
             mode_sel_r   <= 2'd0;
             stage1_valid <= 1'b0;
+        end else if (sync_phase) begin
+            // F8 优化: 平衡捕获瞬间精确复位正弦相位，杜绝相位跳跃突变
+            time_cnt_5s  <= 13'd0;
+            lut_idx_r    <= 7'd0;
         end else if (calc_en) begin
             if (time_cnt_5s >= 13'd4999)
                 time_cnt_5s <= 13'd0;
@@ -218,31 +225,49 @@ module traj_gen #(
     wire signed [31:0] sine_vel_q16     = sine_vel_shifted[31:0];
 
     // -------------------------------------------------------------------------
-    // 流水线第 2 级: 模式切换输出
+    // 流水线第 2 级: 定点斜坡平滑发生器 (F8) 与 模式切换输出
     // -------------------------------------------------------------------------
+    reg signed [31:0] target_setpoint;
+    always @(*) begin
+        case (mode_sel_r)
+            2'b00: target_setpoint = 32'sd0;
+            2'b01: target_setpoint = POS_45DEG_Q16;
+            2'b10: target_setpoint = NEG_45DEG_Q16;
+            default: target_setpoint = 32'sd0;
+        endcase
+    end
+
+    reg signed [31:0] ramp_pos_q16;
+    reg signed [31:0] ramp_vel_q16;
+
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
+            ramp_pos_q16   <= 32'sd0;
+            ramp_vel_q16   <= 32'sd0;
             alpha_ref_q16  <= 32'sd0;
             dalpha_ref_q16 <= 32'sd0;
         end else if (stage1_valid) begin
-            case (mode_sel_r)
-                2'b00: begin // 0 度定点自平衡
-                    alpha_ref_q16  <= 32'sd0;
-                    dalpha_ref_q16 <= 32'sd0;
+            if (mode_sel_r == 2'b11) begin
+                // 0.2Hz 正弦连续动态轨迹跟踪 (拓展要求 2)
+                alpha_ref_q16  <= sine_pos_q16;
+                dalpha_ref_q16 <= sine_vel_q16;
+                ramp_pos_q16   <= sine_pos_q16; // 同步当前位置，避免切回定点时发生突变
+                ramp_vel_q16   <= 32'sd0;
+            end else begin
+                // 定点位置平滑斜坡发生器 (拓展要求 1): 步进 ≤ 0.5度/ms (F8 修复)
+                if (ramp_pos_q16 < target_setpoint - RAMP_STEP_Q16) begin
+                    ramp_pos_q16 <= ramp_pos_q16 + RAMP_STEP_Q16;
+                    ramp_vel_q16 <= RAMP_VEL_Q16;
+                end else if (ramp_pos_q16 > target_setpoint + RAMP_STEP_Q16) begin
+                    ramp_pos_q16 <= ramp_pos_q16 - RAMP_STEP_Q16;
+                    ramp_vel_q16 <= -RAMP_VEL_Q16;
+                end else begin
+                    ramp_pos_q16 <= target_setpoint;
+                    ramp_vel_q16 <= 32'sd0;
                 end
-                2'b01: begin // +45 度定点伺服 (拓展要求 1)
-                    alpha_ref_q16  <= POS_45DEG_Q16;
-                    dalpha_ref_q16 <= 32'sd0;
-                end
-                2'b10: begin // -45 度定点伺服 (拓展要求 1)
-                    alpha_ref_q16  <= NEG_45DEG_Q16;
-                    dalpha_ref_q16 <= 32'sd0;
-                end
-                2'b11: begin // 0.2Hz 正弦连续动态轨迹跟踪 (拓展要求 2)
-                    alpha_ref_q16  <= sine_pos_q16;
-                    dalpha_ref_q16 <= sine_vel_q16;
-                end
-            endcase
+                alpha_ref_q16  <= ramp_pos_q16;
+                dalpha_ref_q16 <= ramp_vel_q16;
+            end
         end
     end
 

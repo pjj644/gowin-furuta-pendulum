@@ -163,19 +163,33 @@ module j280_hw_top_tb;
         end
 
         // ---------------------------------------------------------------------
-        // TEST 3: 状态机起摆与直立平衡捕获闭环响应测试 (P1 / D7)
+        // TEST 3: 状态机起摆与直立平衡捕获闭环响应测试 (P1 / F2 / F6 / F7)
         // ---------------------------------------------------------------------
         $display("\n[TEST 3] 开启电机使能，测试起摆到自平衡状态切换...");
-        sw_motor_en = 1'b1;
         // 先设为下垂态 (ADC 码值 0 对应 ~180 度下垂)
         simulated_adc_data = 12'd0;
-        #25000;
-        $display("  下垂态主状态机 current_state: %0d (期望: 1=STATE_SWINGUP)", u_dut.fsm_state);
-        $display("  起摆能量泵输出 PWM: %0d (放行大角度动力，屏蔽跌落自锁)", u_dut.final_pwm_duty);
-        if (u_dut.fsm_state == 2'd1 && u_dut.final_pwm_duty != 0) begin
-            $display("  [PASS] 起摆态正常放行动力，跌落死锁已彻底解除 (P1/D2 修复成功)!");
+        // 等待 IIR 滤波器将码值阶跃引起的伪大角速度充分收敛至 0 (下垂静止)
+        #250000;
+        sw_motor_en = 1'b1;
+        #5000; // 在首个控制节拍捕获 FSM 切入瞬间的 3.0V 初始扰动脉冲 (F6)
+        $display("  FSM 切入首拍 current_state: %0d (期望: 1=STATE_SWINGUP)", u_dut.fsm_state);
+        $display("  切入首拍初始扰动脉冲 PWM: %0d (期望严格等于 250 对应 3.0V F6)", u_dut.final_pwm_duty);
+
+        if (u_dut.fsm_state == 2'd1 && u_dut.final_pwm_duty == 16'sd250) begin
+            $display("  [PASS] FSM 切入 SWINGUP 成功注入 3.0V(250) 起动死区突破脉冲 (F6 修复成功)!");
         end else begin
-            $display("  [FAIL] 起摆态动力未正常输出!");
+            $display("  [FAIL] 初始扰动脉冲异常! 实际 PWM: %0d", u_dut.final_pwm_duty);
+            test_pass = 0;
+        end
+
+        #20000; // 进入后续起摆节拍，此时选通起摆核连续动力输出
+        $display("  连续起摆态主状态机 current_state: %0d, 能量泵输出 PWM: %0d", u_dut.fsm_state, u_dut.final_pwm_duty);
+        $display("  相对机械能亏损指示 energy_deficit: %b (期望: 1, 机械能亏损需要泵能 F2)", u_dut.u_swing_ctrl.energy_deficit);
+        
+        if (u_dut.fsm_state == 2'd1 && u_dut.final_pwm_duty != 0 && u_dut.u_swing_ctrl.energy_deficit == 1'b1) begin
+            $display("  [PASS] 能量泵持续放行动力，机械能亏损判据有效 (F2 修复成功)!");
+        end else begin
+            $display("  [FAIL] 连续起摆动力或机械能判据异常!");
             test_pass = 0;
         end
 
@@ -185,11 +199,11 @@ module j280_hw_top_tb;
         #250000;
         $display("  摆杆入区滤波稳定后: dtheta = %0d, current_state = %0d (期望: 2=STATE_BALANCE)", 
                  u_dut.dtheta_q16, u_dut.fsm_state);
-        $display("  LQR 平衡控制器输出 PWM: %0d", u_dut.final_pwm_duty);
-        if (u_dut.fsm_state == 2'd2 && led_balance == 1'b0) begin
-            $display("  [PASS] 倒立摆成功捕获切入自平衡区 (STATE_BALANCE)，led_balance 已点亮!");
+        $display("  LQR 平衡控制器输出 PWM: %0d (后台常开流水，捕获切入瞬间无 0 输出空窗 F7)", u_dut.final_pwm_duty);
+        if (u_dut.fsm_state == 2'd2 && led_balance == 1'b0 && u_dut.final_pwm_duty != 0) begin
+            $display("  [PASS] 倒立摆成功捕获切入自平衡区 (STATE_BALANCE)，LQR 控制量实时生效 (F7 修复成功)!");
         end else begin
-            $display("  [FAIL] 未切入自平衡态!");
+            $display("  [FAIL] 未切入自平衡态或捕获空窗输出为零!");
             test_pass = 0;
         end
 
@@ -209,33 +223,35 @@ module j280_hw_top_tb;
         end
 
         // ---------------------------------------------------------------------
-        // TEST 5: 复合按键 KEY2 短按模式轮换测试 (P2 / 拓展要求 1 & 2)
+        // TEST 5: 复合按键 KEY2 短按模式轮换测试 (P2 / 拓展要求 1 & 2 / F8 平滑斜坡)
         // ---------------------------------------------------------------------
-        $display("\n[TEST 5] 模拟短按 KEY2 切换控制轨迹模式...");
+        $display("\n[TEST 5] 模拟短按 KEY2 切换控制轨迹模式并验证斜坡平滑器 (F8)...");
         // 恢复至平衡态
         simulated_adc_data = 12'd2048;
         #100000;
 
-        $display("  当前模式 traj_mode: %0d, 目标位置 alpha_ref: %0d", u_dut.traj_mode, u_dut.alpha_ref_q16);
-
-        // 模拟短按 KEY2: 按下 300ns (15 拍 > 10 拍消抖时间) 后释放
+        // 模拟短按 KEY2: 按下 300ns 后释放
         key_pos_clear = 1'b0;
         #300;
         key_pos_clear = 1'b1;
-        #30000;
-
-        $display("  短按第 1 次后 traj_mode: %0d (期望: 1 (+45度)), alpha_ref: %0d", u_dut.traj_mode, u_dut.alpha_ref_q16);
+        #5000; // 5us 后观察斜坡平滑上升状态
+        $display("  切换第 1 次后 traj_mode: %0d, 目标过渡中: alpha_ref: %0d (平滑步进中)", u_dut.traj_mode, u_dut.alpha_ref_q16);
+        #1200000; // 等待 1.2ms (120个控制周期) 走完斜坡
+        $display("  斜坡走完后最终 alpha_ref: %0d (期望: 51472 (+45度))", u_dut.alpha_ref_q16);
         if (u_dut.traj_mode == 2'd1 && u_dut.alpha_ref_q16 == 32'sd51472) begin
-            $display("  [PASS] KEY2 短按成功切换至 +45 度定点伺服模式 (拓展要求 1 达标)!");
+            $display("  [PASS] KEY2 短按成功切换至 +45 度定点伺服模式，且具备平滑斜坡过渡 (F8 修复成功)!");
         end else begin
-            $display("  [FAIL] 模式切换失败!");
+            $display("  [FAIL] 模式切换或斜坡过渡失败!");
             test_pass = 0;
         end
 
         // ---------------------------------------------------------------------
-        // TEST 6: 转臂多圈软限位保护测试 (D3)
+        // TEST 6: 转臂软限位保护与故障自恢复测试 (D3 / F5)
         // ---------------------------------------------------------------------
-        $display("\n[TEST 6] 模拟转臂旋转超过阈值 (注入 40 个滤波有效脉冲)...");
+        $display("\n[TEST 6] 模拟转臂多圈超限保护触发与清除后自动恢复 (F5)...");
+        // 先将摆杆设为下垂态
+        simulated_adc_data = 12'd0;
+        #100000;
         repeat (10) begin
             #200 enc_a = 1'b1;
             #200 enc_b = 1'b1;
@@ -243,14 +259,29 @@ module j280_hw_top_tb;
             #200 enc_b = 1'b0;
         end
         #40000;
-        $display("  编码器脉冲数: %0d, 软限位报警 soft_limit_err: %b", u_dut.pulse_count, u_dut.soft_limit_err);
-        $display("  主状态机 current_state: %0d (期望: 3=STATE_PROTECT), final_pwm_duty: %0d", 
-                 u_dut.fsm_state, u_dut.final_pwm_duty);
+        $display("  超限报警 soft_limit_err: %b, current_state: %0d (期望: 3=STATE_PROTECT)", 
+                 u_dut.soft_limit_err, u_dut.fsm_state);
 
         if (u_dut.soft_limit_err == 1'b1 && u_dut.fsm_state == 2'd3 && u_dut.final_pwm_duty == 0) begin
-            $display("  [PASS] 转臂软限位保护生效，电机动力彻底切断并进入自锁警报态 (D3 修复成功)!");
+            $display("  [PASS] 转臂软限位保护生效，动力安全切断!");
         end else begin
-            $display("  [FAIL] 软限位保护未触发!");
+            $display("  [FAIL] 软限位保护未正常触发!");
+            test_pass = 0;
+        end
+
+        // 模拟长按 KEY2 清除转臂编码器位置
+        $display("  模拟操作者长按 KEY2 清零转臂编码器...");
+        key_pos_clear = 1'b0;
+        #150000; // 长按触发 clear_pos_pulse
+        key_pos_clear = 1'b1;
+        #30000;
+        $display("  清除位置后 soft_limit_err: %b, current_state: %0d (期望自动恢复至待机起摆态)", 
+                 u_dut.soft_limit_err, u_dut.fsm_state);
+
+        if (u_dut.soft_limit_err == 1'b0 && (u_dut.fsm_state == 2'd0 || u_dut.fsm_state == 2'd1)) begin
+            $display("  [PASS] 软限位故障消除后状态机成功自恢复至待机起摆态 (F5 修复成功)!");
+        end else begin
+            $display("  [FAIL] 故障消除后未能自恢复!");
             test_pass = 0;
         end
 
