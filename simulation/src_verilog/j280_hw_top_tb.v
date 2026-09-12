@@ -47,8 +47,8 @@ module j280_hw_top_tb;
     j280_hw_top #(
         .CLK_FREQ_HZ          (50_000_000),
         .TIMER_1MS_LIMIT      (500),         // 仿真加速: 10us 一个控制周期
-        .CALIB_DEBOUNCE_CYCLES(10),          // 仿真加速: 10 拍按键消抖
-        .ARM_SOFT_LIMIT_Q16   (32'sd3000)    // 仿真加速: 软限位阈值对应约 30 个脉冲
+        .CALIB_DEBOUNCE_CYCLES(10)           // 仿真加速: 10 拍按键消抖
+        // 修复 F13-c: 采用硬件默认参数 ARM_SOFT_LIMIT_Q16 = 32'sd823548 验证真实阈值
     ) u_dut (
         .clk_50m       (clk_50m),
         .rst_n         (rst_n),
@@ -246,19 +246,22 @@ module j280_hw_top_tb;
         end
 
         // ---------------------------------------------------------------------
-        // TEST 6: 转臂软限位保护与故障自恢复测试 (D3 / F5)
+        // TEST 6: 转臂软限位保护与故障自恢复测试 (D3 / F5 / F13-c 真实硬件阈值验证)
         // ---------------------------------------------------------------------
-        $display("\n[TEST 6] 模拟转臂多圈超限保护触发与清除后自动恢复 (F5)...");
+        $display("\n[TEST 6] 模拟转臂多圈超限保护触发 (F13-c: 验证真实阈值 823548) 与清除后自动恢复 (F5)...");
         // 先将摆杆设为下垂态
         simulated_adc_data = 12'd0;
         #100000;
-        repeat (10) begin
-            #200 enc_a = 1'b1;
-            #200 enc_b = 1'b1;
-            #200 enc_a = 1'b0;
-            #200 enc_b = 1'b0;
+        $display("  注入 2010 个完整正交机械周期 (8040 脉冲 > 8000 真实阈值)...");
+        repeat (2010) begin
+            #100 enc_a = 1'b1;
+            #100 enc_b = 1'b1;
+            #100 enc_a = 1'b0;
+            #100 enc_b = 1'b0;
         end
         #40000;
+        $display("  当前转臂角度 alpha_rad_q16: %0d (硬件设定软限位阈值: %0d)", 
+                 u_dut.alpha_rad_q16, u_dut.ARM_SOFT_LIMIT_Q16);
         $display("  超限报警 soft_limit_err: %b, current_state: %0d (期望: 3=STATE_PROTECT)", 
                  u_dut.soft_limit_err, u_dut.fsm_state);
 

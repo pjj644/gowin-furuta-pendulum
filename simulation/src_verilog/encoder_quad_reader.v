@@ -183,7 +183,6 @@ module encoder_quad_reader #(
     reg signed [31:0] pulse_count_prev;
     reg signed [31:0] delta_pulse;
     reg signed [31:0] raw_dalpha_q16;
-    reg               filter_step;
 
     wire signed [17:0] pulse_cnt_18 = (pulse_count > 32'sd131071) ? 18'sd131071 :
                                       ((pulse_count < -32'sd131072) ? -18'sd131072 : pulse_count[17:0]);
@@ -195,12 +194,14 @@ module encoder_quad_reader #(
     wire signed [35:0] delta_mult_36    = delta_cnt_18 * K_VEL_18;
     wire signed [31:0] alpha_shifted    = pulse_mult_36 >>> 10;
 
-    // 拍 2: 基于已打拍的 raw_dalpha_q16 执行 IIR 滤波 (切断长组合路径)
+    // 拍 2: 基于已打拍的 raw_dalpha_q16 计算差值并送乘法器 (拆分长组合路径)
     wire signed [31:0] diff_for_iir     = raw_dalpha_q16 - dalpha_rad_s_q16;
     wire signed [17:0] diff_iir_18      = (diff_for_iir > 32'sd131071) ? 18'sd131071 :
                                           ((diff_for_iir < -32'sd131072) ? -18'sd131072 : diff_for_iir[17:0]);
     wire signed [35:0] iir_diff_mult    = diff_iir_18 * FILTER_ALPHA_18;
-    wire signed [31:0] iir_diff_shifted = iir_diff_mult >>> 16;
+    reg  signed [35:0] iir_diff_mult_r;
+    wire signed [31:0] iir_diff_shifted = iir_diff_mult_r >>> 16;
+    reg  [1:0]         filter_step;
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -210,7 +211,8 @@ module encoder_quad_reader #(
             alpha_rad_q16    <= 32'sd0;
             dalpha_rad_s_q16 <= 32'sd0;
             speed_pps        <= 32'sd0;
-            filter_step      <= 1'b0;
+            iir_diff_mult_r  <= 36'sd0;
+            filter_step      <= 2'd0;
         end else if (calc_en) begin
             // 拍 1: 更新角度与原始角速度寄存器
             delta_pulse      <= pulse_count - pulse_count_prev;
@@ -218,11 +220,15 @@ module encoder_quad_reader #(
             speed_pps        <= delta_pulse * 32'sd1000;
             alpha_rad_q16    <= alpha_shifted[31:0];
             raw_dalpha_q16   <= delta_mult_36[31:0];
-            filter_step      <= 1'b1;
-        end else if (filter_step) begin
-            // 拍 2: 更新一阶数字滤波角速度
+            filter_step      <= 2'd1;
+        end else if (filter_step == 2'd1) begin
+            // 拍 2: 寄存 IIR 乘法器输出，彻底切断 DSP 与累加器级联
+            iir_diff_mult_r  <= iir_diff_mult;
+            filter_step      <= 2'd2;
+        end else if (filter_step == 2'd2) begin
+            // 拍 3: 更新一阶数字滤波角速度
             dalpha_rad_s_q16 <= dalpha_rad_s_q16 + iir_diff_shifted[31:0];
-            filter_step      <= 1'b0;
+            filter_step      <= 2'd0;
         end
     end
 

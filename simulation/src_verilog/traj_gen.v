@@ -34,7 +34,7 @@ module traj_gen #(
     localparam signed [31:0] TRAJ_AMP_Q16   = 32'sd28594;   // 25 deg (0.436332 rad * 65536)
     localparam signed [31:0] TRAJ_VMAX_Q16  = 32'sd35933;   // A*2*pi*f = 0.5483 rad/s * 65536
     localparam signed [31:0] RAMP_STEP_Q16  = 32'sd572;     // 定点平滑斜坡步进 (0.5度/ms, 90ms内平滑到45度 F8)
-    localparam signed [31:0] RAMP_VEL_Q16   = 32'sd57200;   // 对应前馈速度约 0.5 rad/s
+    localparam signed [31:0] RAMP_VEL_Q16   = 32'sd571998;  // 对应 0.5度/ms = 500度/s = 8.7266 rad/s (修复 N4: 571998)
 
     // -------------------------------------------------------------------------
     // 流水线第 1 级: 5000 拍时间累加与 LUT 索引预计算打拍
