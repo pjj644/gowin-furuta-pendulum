@@ -1,7 +1,7 @@
 # 选题一 RTL 代码合规性检查报告（第五轮 · 阶段收尾）
 
 > **检查对象**：[`d:\Gowin_fpga\edu\project\furuta_lqr_ctrl`](file:///d:/Gowin_fpga/edu/project/furuta_lqr_ctrl)
-> **代码基线**：`main` @ **`f97ecc5`**（功能分支 `feat/f13b-dynamics-hil-closed-loop` 已 fast-forward 合并并删除）
+> **代码基线**：`main` @ **`0f594e9`**（功能分支 `feat/f13b-dynamics-hil-closed-loop` 已 fast-forward 合并并删除；缺陷修复的最后一个提交为 `f97ecc5`）
 > **对标赛题**：[`选题一_基于FPGA的实时姿态控制系统.md`](file:///c:/Users/28399/Desktop/赛道/选题一_基于FPGA的实时姿态控制系统.md)
 > **报告日期**：2026-09-12
 > **证据来源**：Gowin EDA V1.9.12.03 综合/PnR/时序报告实读 + ModelSim 四 TB 全量回归实跑 + Python 逐位定点复现 + CodeReview 子 agent 独立审查
@@ -43,7 +43,7 @@
 
 ---
 
-## 一、本轮完成的 8 个提交
+## 一、本轮完成的 9 个提交
 
 | commit | 主题 | 验证结果 |
 | :--- | :--- | :--- |
@@ -55,6 +55,7 @@
 | `9677070` | HIL 断言加固：传感器一致性（M4）、解卷绕覆盖（M2）、TEST D 尾窗锚定（B2）、失真注释（M5） | 稳态误差量值由失真 10.155° 修正为真实 1.1017° |
 | `15de660` | LQI 积分分离：窗口外**冻结**而非清零（M1） | `alpha_int_q16` 208 → **−2002**；稳态误差 1.1017° → **0.2302°** |
 | `f97ecc5` | 单元 TB 补 e_kin/e_pot 数值断言 + 负向 θ̇ 覆盖（M3） | 用例 48 → **52**，0 失败 |
+| `0f594e9` | 构建脚本 `build.tcl` 移出被忽略的 `impl/`，使本报告 §7.2 的复现命令在克隆后可用 | 新位置重跑：exit 0、top = `j280_hw_top`、Fmax **62.352 MHz**（与原位置完全一致） |
 
 > **一处需更正的记录**：`f97ecc5` 的提交信息写的是 "62 vectors (was 53)"，**该数字有误**。源码实际 `check_case` / `check_case_full` 调用共 **50** 处，加 Batch 4 的 2 条手动断言 = **52 个用例**（改前为 48）。TB 自身汇总行打印的 `总用例数 = 52, 失败数 = 0` 与此一致。提交已合并入 main，不改写历史，特此在本报告中更正。
 
@@ -307,12 +308,13 @@ DSP        | 17.5/20     | 88%   (MULT18X18×7, MULTALU36X18×12, MULTADDALU18X1
 
 | 仓库 | 分支 | HEAD | 状态 |
 | :--- | :--- | :--- | :--- |
-| `d:\Gowin_fpga\edu\project\furuta_lqr_ctrl` | `main` | **`f97ecc5`** | 工作区干净；功能分支 `feat/f13b-dynamics-hil-closed-loop` 已 fast-forward 合并并删除 |
+| `d:\Gowin_fpga\edu\project\furuta_lqr_ctrl` | `main` | **`0f594e9`** | 工作区干净；功能分支 `feat/f13b-dynamics-hil-closed-loop` 已 fast-forward 合并并删除 |
 | `c:\Users\28399\Desktop\赛道` | `main` | 本报告提交 | 工作区干净 |
 
-本轮合并入 main 的 8 个提交（fast-forward，无合并提交，共 11 个文件 +2073 / −52）：
+本轮合并入 main 的 9 个提交（fast-forward，无合并提交）：
 
 ```
+0f594e9  chore(build): move the Gowin command-line build script out of the ignored impl/ dir
 f97ecc5  test(swingup): assert e_kin/e_pot numerically and cover the negative dtheta path (M3)
 15de660  fix(lqi): freeze the integrator outside the separation window instead of clearing it (M1)
 9677070  test(hil): add sensor-consistency and unwrap-coverage assertions; anchor TEST D tail (M4,M2,B2,M5)
@@ -345,8 +347,10 @@ run_all.bat
 ```powershell
 cd d:\Gowin_fpga\edu\project\furuta_lqr_ctrl
 $env:PATH="D:\Gowin_fpga\Gowin\Gowin_V1.9.12.03_x64\IDE\bin;$env:PATH"
-gw_sh.exe impl\build.tcl
+gw_sh.exe build.tcl
 ```
+
+该脚本已入库（项目根目录），头部列出了应检查的产出文件与 `f97ecc5` 基线的实测验收值，便于重跑后直接比对。
 
 产出：`impl/gwsynthesis/furuta_lqr_ctrl.log`（综合）、`impl/pnr/furuta_lqr_ctrl.rpt.txt`（资源与引脚）、`impl/pnr/furuta_lqr_ctrl_tr_content.html`（时序）、`impl/pnr/furuta_lqr_ctrl.fs`（bitstream）。
 
@@ -389,4 +393,4 @@ Step 5/5  furuta_hil_tb (闭环 HIL)      -> 8 PASS / 1 FAIL / HIL RESULT: FAIL 
 | 二轮 | `596e996` | P0 真实解决；提出 F1~F15 |
 | 三轮 | `a8be230` | 11 项已修；提出 N1~N5（含致命定标错） |
 | 四轮 | `5dec1f8` | N1~N4 已修；提出 P1~P6 |
-| **五轮** | **`f97ecc5`** | **HIL 闭环建成；起摆/平衡/抗扰首次实测 PASS；49 项编号缺陷全部关闭；余 R1~R15 共 15 项待办（其中 3 项为缺陷/隐患）** |
+| **五轮** | **`0f594e9`** | **HIL 闭环建成；起摆/平衡/抗扰首次实测 PASS；49 项编号缺陷全部关闭；余 R1~R15 共 15 项待办（其中 3 项为缺陷/隐患）** |
