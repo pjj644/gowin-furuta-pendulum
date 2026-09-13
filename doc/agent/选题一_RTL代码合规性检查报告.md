@@ -357,7 +357,7 @@ gw_sh.exe build.tcl
 ### 7.3 当前回归状态快照
 
 ```
-Step 1/5  Compile                      -> 11 个 vlog 全部 Errors: 0, Warnings: 0
+Step 1/5  Compile                      -> 13 个 vlog 全部 Errors: 0, Warnings: 0
 Step 2/5  swing_up_ctrl_tb             -> 52 用例 / 0 失败 / [ALL PASS]
 Step 3/5  j280_hw_top_tb               -> 9 PASS / 0 FAIL / ALL PASSED
 Step 4/5  furuta_lqr_ctrl_tb           -> 6 PASS / 0 FAIL / 100% 通过
