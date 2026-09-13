@@ -1,8 +1,8 @@
 # 选题一 RTL 代码复检报告（第四轮 · 优化收尾）
 
-> **复检对象**：[`d:\Gowin_fpga\edu\project\furuta_lqr_ctrl`](file:///d:/Gowin_fpga/edu/project/furuta_lqr_ctrl)
+> **复检对象**：[`C:\Users\28399\Desktop\赛道\furuta_lqr_ctrl`](../../furuta_lqr_ctrl)
 > **复检基线**：`5dec1f8`（第四轮复检起点）→ **`1652e59`**（本轮优化收尾）
-> **对标赛题**：[`选题一_基于FPGA的实时姿态控制系统.md`](file:///c:/Users/28399/Desktop/赛道/选题一_基于FPGA的实时姿态控制系统.md)
+> **对标赛题**：[`选题一_基于FPGA的实时姿态控制系统.md`](../../赛题要求和芯片数据手册/选题一_基于FPGA的实时姿态控制系统.md)
 > **前序报告**：第三轮复检报告（已随 `b5e5ec4` 归档，本文覆盖更新）
 > **报告日期**：2026-09-12
 > **证据来源**：源码逐行核查 + Gowin EDA V1.9.12.03 综合/PnR/时序报告实读 + ModelSim 三 TB 全量回归**实跑** + Python 逐位定点复现
@@ -52,7 +52,7 @@
 
 ### 1.1 N1【致命】能量定标错误 65536 倍 —— ✅ 彻底修复
 
-[`swing_up_ctrl.v#L121`](file:///d:/Gowin_fpga/edu/project/furuta_lqr_ctrl/src/swing_up_ctrl.v) 已由 `>>> 8` 改为 **`>>> 24`**。
+[`swing_up_ctrl.v#L121`](../../furuta_lqr_ctrl/src/swing_up_ctrl.v) 已由 `>>> 8` 改为 **`>>> 24`**。
 
 **Python 逐位复现验证：9 个 θ̇ × 5 个 θ = 45 组组合，`energy_deficit` 失配数 = 0。**
 
@@ -69,7 +69,7 @@
 
 ### 1.2 N2【严重】动能钳位阈值不匹配 —— ✅ 彻底修复
 
-[`#L80-81`](file:///d:/Gowin_fpga/edu/project/furuta_lqr_ctrl/src/swing_up_ctrl.v) 钳位值由 `±131071`（= ±32 rad/s，与 8 rad/s 阈值不匹配）改为 **`+32767 / −32768`**（= ±8.0 rad/s in Q12）。
+[`#L80-81`](../../furuta_lqr_ctrl/src/swing_up_ctrl.v) 钳位值由 `±131071`（= ±32 rad/s，与 8 rad/s 阈值不匹配）改为 **`+32767 / −32768`**（= ±8.0 rad/s in Q12）。
 
 验证：θ̇ = 8 rad/s → `e_kin = 1407`，真实值 `0.5×0.000667×64×65536 = 1399`，**误差 0.6%** ✅；θ̇ = 12 rad/s 正确钳位到 8 rad/s 尺度。
 
@@ -88,7 +88,7 @@ Stage 2 插入 `abs_x_r2` / `x_neg_r2` 寄存器，起摆核扩为 5 级流水�
 
 ### 1.4 N4【中】斜坡速度前馈小 10 倍 —— ✅ 修复
 
-[`traj_gen.v#L37`](file:///d:/Gowin_fpga/edu/project/furuta_lqr_ctrl/src/traj_gen.v) `RAMP_VEL_Q16` 由 `57200` 改为 **`571998`**（= 8.7266 rad/s），与 `RAMP_STEP_Q16 = 572`（0.5°/ms）严格自洽，注释同步更正。
+[`traj_gen.v#L37`](../../furuta_lqr_ctrl/src/traj_gen.v) `RAMP_VEL_Q16` 由 `57200` 改为 **`571998`**（= 8.7266 rad/s），与 `RAMP_STEP_Q16 = 572`（0.5°/ms）严格自洽，注释同步更正。
 
 ### 1.5 N5【低】折线段边界不连续 —— ⚠️ **只修了一半**（本轮收尾，见 §2.1）
 
@@ -170,13 +170,13 @@ Stage 2 插入 `abs_x_r2` / `x_neg_r2` 寄存器，起摆核扩为 5 级流水�
 附带踩到的 Tcl 坑：`echo "... [1/3] ..."` 中方括号被当作**命令替换**执行，报 `invalid command name "1/3"`，配合 `onerror {quit -f}` 直接中断脚本；已改用大括号 `echo {...}` 并在文件头注释说明。
 
 **产出文件**：
-- 新增 [`sim_modelsim/compile.do`](file:///d:/Gowin_fpga/edu/project/furuta_lqr_ctrl/sim_modelsim/compile.do)：vlib/vmap + 8 个 RTL + 3 个 TB 编译
-- 新增 [`sim_modelsim/run_all.bat`](file:///d:/Gowin_fpga/edu/project/furuta_lqr_ctrl/sim_modelsim/run_all.bat)：4 步回归入口，`call vsim` 串联 + `errorlevel` 逐级失败中断
+- 新增 [`sim_modelsim/compile.do`](../../furuta_lqr_ctrl/sim_modelsim/compile.do)：vlib/vmap + 8 个 RTL + 3 个 TB 编译
+- 新增 [`sim_modelsim/run_all.bat`](../../furuta_lqr_ctrl/sim_modelsim/run_all.bat)：4 步回归入口，`call vsim` 串联 + `errorlevel` 逐级失败中断
 - 删除有缺陷的 `sim_modelsim/run_sim.do`
 
 ### 2.3 P3 修复：矩阵覆盖 19 组 → **完整 35 组**
 
-[`swing_up_ctrl_tb.v`](file:///d:/Gowin_fpga/edu/project/furuta_lqr_ctrl/src/swing_up_ctrl_tb.v) 的 Batch 3 由 19 组补满为 **5 θ × 7 θ̇ = 35 组**，与注释声称一致。**全部期望值由 Python 逐位复现 RTL 定点路径算出**，非人工推断；每组在源码中以 `// E=<值>` 注明，便于复核。
+[`swing_up_ctrl_tb.v`](../../furuta_lqr_ctrl/src/swing_up_ctrl_tb.v) 的 Batch 3 由 19 组补满为 **5 θ × 7 θ̇ = 35 组**，与注释声称一致。**全部期望值由 Python 逐位复现 RTL 定点路径算出**，非人工推断；每组在源码中以 `// E=<值>` 注明，便于复核。
 
 其中两组为**能量过零临界点**，是最敏感的断言：
 
@@ -353,7 +353,7 @@ DSP        | 17.5/20     | 88%   (MULT18X18×7, MULTALU36X18×12, MULTADDALU18X1
 经四轮检查仍无法从代码与文档推断的 5 项：
 
 1. **板载晶振是否确为 50 MHz** —— 全部模块 `CLK_FREQ_HZ` 按 50 MHz 参数化。若实为 27/24 MHz，1ms 节拍、SPI 2.5MHz 分频、PWM 20kHz 载波全部偏移。
-2. **摆杆角度传感器确切型号** —— [`angle_sensor_reader.v`](file:///d:/Gowin_fpga/edu/project/furuta_lqr_ctrl/src/angle_sensor_reader.v) 仍硬编码 `adc_latch <= shift_reg[11:0]` 且无 MOSI 输出：
+2. **摆杆角度传感器确切型号** —— [`angle_sensor_reader.v`](../../furuta_lqr_ctrl/src/angle_sensor_reader.v) 仍硬编码 `adc_latch <= shift_reg[11:0]` 且无 MOSI 输出：
    - **MCP3201**：首 bit 为 null，12 位数据落在 `shift_reg[12:1]` → **当前位对齐错误**；
    - **AS5048A / TLE5012B**：**必须发命令字**，当前单向 SPI 无法工作；
    - **ADS7886**：12 位 MSB-first 紧接 CS 下降沿，需核对是否多采 4 bit。

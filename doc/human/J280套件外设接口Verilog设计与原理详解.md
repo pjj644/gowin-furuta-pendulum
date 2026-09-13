@@ -5,10 +5,10 @@
 > **配套机械**：J280 姿态控制系统旋转倒立摆套件  
 > **读者定位**：初次接触电机驱动、光电正交编码器与高精度角度传感器的参赛队员与 FPGA 开发者  
 > **对应源码**：
-> - [`motor_pwm_driver.v`](file:///d:/Gowin_fpga/edu/project/furuta_lqr_ctrl/src/motor_pwm_driver.v) —— 直流电机 20kHz 高频 PWM 与 H 桥驱动发生器
-> - [`encoder_quad_reader.v`](file:///d:/Gowin_fpga/edu/project/furuta_lqr_ctrl/src/encoder_quad_reader.v) —— 电机编码器 4 倍频消抖滤波测速测角模块
-> - [`angle_sensor_reader.v`](file:///d:/Gowin_fpga/edu/project/furuta_lqr_ctrl/src/angle_sensor_reader.v) —— 摆杆 12-bit SPI ADC / 磁编码器零点校准与解卷绕模块
-> - [`j280_hw_top.v`](file:///d:/Gowin_fpga/edu/project/furuta_lqr_ctrl/src/j280_hw_top.v) —— 硬件系统顶层集成互联与安全保护模块
+> - [`motor_pwm_driver.v`](../../furuta_lqr_ctrl/src/motor_pwm_driver.v) —— 直流电机 20kHz 高频 PWM 与 H 桥驱动发生器
+> - [`encoder_quad_reader.v`](../../furuta_lqr_ctrl/src/encoder_quad_reader.v) —— 电机编码器 4 倍频消抖滤波测速测角模块
+> - [`angle_sensor_reader.v`](../../furuta_lqr_ctrl/src/angle_sensor_reader.v) —— 摆杆 12-bit SPI ADC / 磁编码器零点校准与解卷绕模块
+> - [`j280_hw_top.v`](../../furuta_lqr_ctrl/src/j280_hw_top.v) —— 硬件系统顶层集成互联与安全保护模块
 
 ---
 
@@ -152,7 +152,7 @@ H 桥（H-Bridge）是由 4 个大功率开关管（通常为 MOSFET）组成的
 
 ### 2.4 `motor_pwm_driver.v` 逐行代码与逻辑深度精解
 
-该模块位于 [`d:\Gowin_fpga\edu\project\furuta_lqr_ctrl\src\motor_pwm_driver.v`](file:///d:/Gowin_fpga/edu/project/furuta_lqr_ctrl/src/motor_pwm_driver.v)：
+该模块位于 [`C:\Users\28399\Desktop\赛道\furuta_lqr_ctrl\src\motor_pwm_driver.v`](../../furuta_lqr_ctrl/src/motor_pwm_driver.v)：
 
 #### 1. 周期与比较阈值计算
 系统时钟为板载 50MHz（周期 20ns），PWM 目标频率为 20kHz（周期 50μs）：
@@ -265,7 +265,7 @@ B 相: ___|ˉˉˉ|___|ˉˉˉ|___|ˉˉˉ|___
 ---
 
 ### 3.5 `encoder_quad_reader.v` 逐行代码与逻辑深度精解
-该模块位于 [`d:\Gowin_fpga\edu\project\furuta_lqr_ctrl\src\encoder_quad_reader.v`](file:///d:/Gowin_fpga/edu/project/furuta_lqr_ctrl/src/encoder_quad_reader.v)：
+该模块位于 [`C:\Users\28399\Desktop\赛道\furuta_lqr_ctrl\src\encoder_quad_reader.v`](../../furuta_lqr_ctrl/src/encoder_quad_reader.v)：
 * **输入输出**：50MHz 时钟、复位、外部 A/B/Z 引脚、1ms 控制使能 `calc_en`；
 * **核心输出**：
   - `pulse_count`：32 位有符号绝对位置（顺时针累加，逆时针累减）；
@@ -345,7 +345,7 @@ theta_err_q16 <= (diff_unwrapped * 32'sd411775) >>> 12;
 ---
 
 ### 4.5 `angle_sensor_reader.v` 逐行代码与逻辑深度精解
-该模块位于 [`d:\Gowin_fpga\edu\project\furuta_lqr_ctrl\src\angle_sensor_reader.v`](file:///d:/Gowin_fpga/edu/project/furuta_lqr_ctrl/src/angle_sensor_reader.v)：
+该模块位于 [`C:\Users\28399\Desktop\赛道\furuta_lqr_ctrl\src\angle_sensor_reader.v`](../../furuta_lqr_ctrl/src/angle_sensor_reader.v)：
 * 内置 4 状态 SPI 主机状态机（`IDLE`, `START`, `XFER`, `FINISH`）；
 * 支持外部直接数据旁路模式 `ext_raw_valid`（便于仿真和板载并行 ADC 切换）；
 * 每 1ms 完成一次采样并自动计算差分角速度 `dtheta_q16` 并经一阶 IIR 滤波滤除 ADC 量化白噪声。
@@ -354,7 +354,7 @@ theta_err_q16 <= (diff_unwrapped * 32'sd411775) >>> 12;
 
 ## 五、系统级整合：`j280_hw_top.v` 顶层互联与安全闭环
 
-硬件顶层模块 [`j280_hw_top.v`](file:///d:/Gowin_fpga/edu/project/furuta_lqr_ctrl/src/j280_hw_top.v) 是将各大外设驱动与控制算法融为一体的枢纽：
+硬件顶层模块 [`j280_hw_top.v`](../../furuta_lqr_ctrl/src/j280_hw_top.v) 是将各大外设驱动与控制算法融为一体的枢纽：
 
 ### 5.1 1ms (1000Hz) 控制节拍产生器
 倒立摆控制不能随意乱跑，必须严格运行在确定的时间离散网格上：

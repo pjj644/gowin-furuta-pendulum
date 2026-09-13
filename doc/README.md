@@ -83,7 +83,7 @@ doc/
 ## 🤖 agent/ —— 状态、审计与教训
 
 ### 5. 📊 [《选题一_RTL代码合规性检查报告.md》](./agent/选题一_RTL代码合规性检查报告.md) ← **当前权威状态**
-* **核心定位**：第五轮阶段收尾报告，绑定 RTL `main @ 0f594e9`，全部数值为实测
+* **核心定位**：第五轮阶段收尾报告，绑定 RTL `main @ 1aa5f2c`，全部数值为实测
 * **主要内容**：
   - 赛题 12 个条目逐条达标判定（基础要求 1/2/3 已闭环实测达成）；
   - HIL 九项判据实测结果、起摆能量轨迹、稳态误差三级改善过程；
@@ -114,6 +114,15 @@ doc/
 | [`../赛题要求和芯片数据手册/`](../赛题要求和芯片数据手册/) | 赛题原文 md、题目要求 PDF、完整指南 PDF、GW2A 系列 DS102 数据手册 |
 | [`../simulation/`](../simulation/) | Python 黄金模型（`dynamics.py` / `controller.py` / `config.py` / `test_suite.py`）与早期 Verilog 副本 |
 | [`../images/`](../images/) | J280 套件实物照片（主板、倒立摆整机、机械结构细节） |
-| `D:\Gowin_fpga\edu\project\furuta_lqr_ctrl` | **RTL 主仓库**（独立 git 仓库，权威源码，非本仓库副本） |
+| [`../furuta_lqr_ctrl/`](../furuta_lqr_ctrl/) | **RTL 主仓库**：嵌套的**独立 git 仓库**（`main @ 1aa5f2c`），权威源码。入口脚本 `eda.ps1`。⚠️ 不要 `git add` 它，也不要改 `../simulation/src_verilog/`——见 [`../AGENTS.md`](../AGENTS.md) §1 |
+
+### ⚠️ 两个必须知道的目录约定
+
+1. **RTL 仓库是嵌套的独立 git 仓库**，不是 submodule。文档仓库的 `.gitignore` 已排除它；
+   强行 `git add` 会把它变成 gitlink（伪 submodule），克隆者只会得到空目录。
+2. **EDA 工具无法在中文路径下运行**（目录名「赛道」）。Gowin 报 `SP0002 Corrupted project file`，
+   ModelSim 报 sqlite `DATABASE ERROR` 却**返回退出码 0**。
+   统一经 `furuta_lqr_ctrl\eda.ps1` 调用，它会自动维护一个 ASCII junction（`C:\fpga_build`）。
+   详见 [`../AGENTS.md`](../AGENTS.md) §1.2 与 [`agent/踩坑记录.md`](./agent/踩坑记录.md) A9。
 
 > ⚠️ `../simulation/src_verilog/` 是**历史副本**，不参与综合与验证，已与 RTL 主仓库漂移。任何修改都必须落在 RTL 主仓库，详见 [`../AGENTS.md`](../AGENTS.md) 的「单一事实来源」约定。

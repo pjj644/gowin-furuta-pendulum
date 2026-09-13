@@ -15,26 +15,71 @@
 | **目标器件** | 高云 **GW2A-LV55PG484C8/I7**（GW2A-55C，PBGA484，speed grade 8） |
 | **EDA 工具** | Gowin EDA **V1.9.12.03**（综合/PnR/bitstream）+ ModelSim **SE-64 10.7**（仿真） |
 | **当前状态** | ✅ 赛题基础要求 1/2/3 **已闭环实测达成**；拓展要求 3 达成；⚠️ 拓展要求 1 精度差 0.03°；⚠️ 拓展要求 2 仅算法级验算 |
-| **权威源码** | `D:\Gowin_fpga\edu\project\furuta_lqr_ctrl`（**独立 git 仓库**，`main @ 0f594e9`） |
-| **本仓库** | `C:\Users\28399\Desktop\赛道`（文档 + Python 黄金模型 + 赛题资料，**不含权威 RTL**） |
+| **权威源码** | `furuta_lqr_ctrl\`（本目录下**嵌套的独立 git 仓库**，`main @ 1aa5f2c`） |
+| **文档仓库** | `C:\Users\28399\Desktop\赛道`（`.gitignore` 已排除 RTL 子仓库） |
+| **⚠️ EDA 路径约束** | 本路径含中文，**Gowin 与 ModelSim 均无法直接运行**；必须经 ASCII junction `C:\fpga_build`，由 `furuta_lqr_ctrl\eda.ps1` 自动处理（见 §1.2） |
 | **待办总览** | R1~R15，见 [`doc/agent/选题一_RTL代码合规性检查报告.md`](doc/agent/选题一_RTL代码合规性检查报告.md) §五 |
 
 ---
 
-## 1. 两个仓库与「单一事实来源」
+## 1. 目录结构、两个 git 仓库与「单一事实来源」
 
-这是一个**双仓库**项目，最容易犯的错就是改错地方：
+一个工作区目录树，内含**两个独立的 git 仓库**（物理嵌套，但**不是** submodule）：
 
-| 仓库 | 路径 | 内容 | 权威性 |
-| :--- | :--- | :--- | :--- |
-| **RTL 主仓库** | `D:\Gowin_fpga\edu\project\furuta_lqr_ctrl` | `src/` 共 15 个文件（8 个可综合模块 + CST + SDC + 3 个 testbench + 2 个 HIL 文件）、`furuta_lqr_ctrl.gprj` 工程、`build.tcl` 构建脚本、`impl/` 综合产物（已忽略）、`sim_modelsim/` 回归脚本 | ✅ **唯一权威** |
-| **文档仓库** | `C:\Users\28399\Desktop\赛道` | `doc/`（人向+agent向文档）、`simulation/`（Python 黄金模型）、赛题 PDF、器件手册、实物照片 | 文档权威；**RTL 副本已失效** |
+```
+C:\Users\28399\Desktop\赛道\            ← 文档仓库（git main）
+├── AGENTS.md                          本文件
+├── .gitignore                         已排除 furuta_lqr_ctrl/
+├── doc\{human,agent}\                 文档（分类标准见 doc/README.md）
+├── simulation\                        Python 黄金模型 + ⛔ 已失效的 RTL 副本
+├── 赛题要求和芯片数据手册\
+├── images\
+└── furuta_lqr_ctrl\                   ← RTL 主仓库（独立 git main @ 1aa5f2c）
+    ├── src\          15 个文件：8 可综合模块 + CST + SDC + 3 TB + 2 HIL
+    ├── sim_modelsim\ run_all.bat / compile.do / modelsim.ini
+    ├── eda.ps1       ★ EDA 统一入口（自动维护 ASCII junction）
+    ├── build.tcl     Gowin 构建脚本（自定位，不含绝对路径）
+    ├── furuta_lqr_ctrl.gprj
+    └── impl\         综合产物（已忽略）
+```
 
-> ### ⛔ `simulation/src_verilog/` 是历史副本，已漂移，禁止修改
->
-> 该目录下有 12 个 `.v` 文件，是项目早期从 RTL 仓库拷来的快照，**不参与综合、不参与验证、不与 RTL 主仓库同步**。它们与权威源码已存在实质差异（例如缺少 HIL 平台、缺少后续五轮的全部缺陷修复）。
->
-> 在这里改代码 = 改动完全丢失 + 制造第三份漂移副本。**所有 RTL 修改必须落在 `D:\Gowin_fpga\edu\project\furuta_lqr_ctrl\src\`。**
+### 1.1 ⛔ 不要 `git add furuta_lqr_ctrl`
+
+它是**嵌套的独立仓库**，不是 submodule。文档仓库的 `.gitignore` 已排除它。
+若强行 add，git 会记成一个 gitlink（伪 submodule），克隆者只得到一个空目录，
+且 RTL 的 17 个提交历史（五轮迭代的完整证据链）无法随之传递。
+**两个仓库各自 `git status` / `add` / `commit` / `log`。**
+
+### 1.2 ⚠️ EDA 工具无法在中文路径下运行 —— 统一用 `eda.ps1`
+
+目录名「赛道」含非 ASCII 字符，**两个 EDA 工具都会失败**（均为实测）：
+
+| 工具 | 症状 | 退出码 |
+| :--- | :--- | :---: |
+| Gowin | `ERROR (SP0002) : Corrupted project file`（路径中「赛道」被读成 `??`） | 1 |
+| ModelSim | `sqlite3_open ... DATABASE ERROR` + `mtilibWrite(): INTERNAL ERROR` | **0（失败却报成功）** |
+
+解法是一个纯 ASCII 的 NTFS junction：`C:\fpga_build` → 真实仓库。
+**`eda.ps1` 会自动创建并维护它**，因此正常使用无需关心细节：
+
+```powershell
+cd C:\Users\28399\Desktop\赛道\furuta_lqr_ctrl
+.\eda.ps1 build      # 综合 + PnR + 时序 + bitstream
+.\eda.ps1 regress    # ModelSim 全量回归（5 步）
+.\eda.ps1 doctor     # 自检：junction / 工具链 / 关键文件 / modelsim.ini
+.\eda.ps1 path       # 只打印应当使用的 ASCII 工作路径
+```
+
+junction 是文件系统层的别名，所以产物仍落在真实目录，git、相对路径
+（`compile.do` 里的 `../src/...`）与 `.gprj` 全部照常工作。若仓库日后移回纯 ASCII
+路径，`eda.ps1` 会自动识别并跳过 junction。
+详见 [`furuta_lqr_ctrl/eda.ps1`](furuta_lqr_ctrl/eda.ps1) 头部说明与踩坑记录 A9。
+
+### 1.3 ⛔ `simulation/src_verilog/` 是历史副本，已漂移，禁止修改
+
+该目录下有 12 个 `.v` 文件，是项目早期从 RTL 仓库拷来的快照，**不参与综合、不参与验证、不与 RTL 主仓库同步**。它们与权威源码已存在实质差异（例如缺少 HIL 平台、缺少后续五轮的全部缺陷修复）。
+
+在这里改代码 = 改动完全丢失 + 制造第三份漂移副本。**所有 RTL 修改必须落在 `furuta_lqr_ctrl\src\`。**
 
 `simulation/` 里**仍然权威**的部分是 Python 黄金模型：
 
@@ -127,11 +172,15 @@
 
 ### 4.1 仿真回归（约 5 分钟）
 
-```bat
-cd D:\Gowin_fpga\edu\project\furuta_lqr_ctrl\sim_modelsim
-run_all.bat
-echo %ERRORLEVEL%
+```powershell
+cd C:\Users\28399\Desktop\赛道\furuta_lqr_ctrl
+.\eda.ps1 regress
+$LASTEXITCODE          # 0=全通过  1=有判据失败  2=vsim 进程崩溃
 ```
+
+`eda.ps1 regress` 会先确保 ASCII junction 存在（§1.2），再在该路径下调用
+`sim_modelsim\run_all.bat`。**不要直接跑 `run_all.bat`**：从中文路径跑时 ModelSim 的
+work 库打不开，而且 `vlog` 仍会返回 0。
 
 **退出码语义**（务必检查，不要只看输出）：
 
@@ -145,18 +194,22 @@ echo %ERRORLEVEL%
 
 长时间验收（65 s 物理时长，约 25 分钟）：
 
-```bat
-set HIL_ARGS=+HIL_CTRL_CYCLES=65000
-run_all.bat
+```powershell
+$env:HIL_ARGS = "+HIL_CTRL_CYCLES=65000"
+.\eda.ps1 regress
 ```
 
 ### 4.2 综合、布局布线、时序、bitstream（约 1 分钟）
 
 ```powershell
-cd D:\Gowin_fpga\edu\project\furuta_lqr_ctrl
-$env:PATH="D:\Gowin_fpga\Gowin\Gowin_V1.9.12.03_x64\IDE\bin;$env:PATH"
-gw_sh.exe build.tcl
+cd C:\Users\28399\Desktop\赛道\furuta_lqr_ctrl
+.\eda.ps1 build
+$LASTEXITCODE          # 0 = 成功
 ```
+
+脚本会自动打印验收要点（top module / warning 数 / Fmax / 违例 / bitstream 时间戳）
+并与基线对比。底层仍是 `gw_sh.exe build.tcl`，但**必须经 junction 路径执行**（§1.2）：
+直接从中文路径跑会得到 `ERROR (SP0002) Corrupted project file`。
 
 产出（`impl/` 整个目录被 `.gitignore` 忽略）：
 
@@ -171,7 +224,10 @@ gw_sh.exe build.tcl
 >
 > `.gprj` 共 15 个条目，其中 **8 个 Verilog 为 `enable="1"`**（即 §3.2 的八个模块）加上 CST 与 SDC；**5 个为 `enable="0"`**（四个 testbench + `furuta_plant_model.v`，`furuta_hil_tb.v` 也在其中）。改 `enable="0"` 的文件不影响综合结果，无需重跑 Gowin；HIL 两个文件另外以 `` `ifndef SYNTHESIS `` 包裹作为双重保险。
 
-### 4.3 验收基线（`main @ 0f594e9` 实测，重跑后应逐项吻合）
+### 4.3 验收基线（`main @ 1aa5f2c` 实测，重跑后应逐项吻合）
+
+> 下列数字在仓库从 `D:\Gowin_fpga\edu\project\` 迁入本目录**前后完全一致**（经 junction
+> 路径重测验证），证明迁移未改变任何电气结果。
 
 ```
 综合      top = j280_hw_top，无 WARN，无 ERROR
@@ -284,7 +340,7 @@ python run_simulation.py    # 全流程仿真 + 出图
 | 二轮 | `596e996` | P0 真实解决；提出 F1~F15（含两个致命：cos 表索引错、能量判据完全未实现） |
 | 三轮 | `a8be230` | 11 项已修；提出 N1~N5（含致命定标错 65536 倍） |
 | 四轮 | `5dec1f8` | N1~N4 已修；提出 P1~P6 |
-| **五轮** | **`0f594e9`** | **HIL 闭环建成；起摆/平衡/抗扰首次实测 PASS；49 项编号缺陷全部关闭；余 R1~R15** |
+| **五轮** | **`1aa5f2c`** | **HIL 闭环建成；起摆/平衡/抗扰首次实测 PASS；49 项编号缺陷全部关闭；余 R1~R15；仓库迁入文档目录并适配工具链** |
 
 累计识别 **49 项编号缺陷（E/D/F/N/P/B/H/M 系列），全部关闭**；另有 **15 项剩余事项 R1~R15**，其中 3 项为待处理缺陷/隐患（R1 精度、R11 PWM 积分窗口少 1 拍、R13 流水可被抢占）。
 

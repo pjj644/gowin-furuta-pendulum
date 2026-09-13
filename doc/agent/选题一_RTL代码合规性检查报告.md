@@ -1,9 +1,11 @@
 # 选题一 RTL 代码合规性检查报告（第五轮 · 阶段收尾）
 
-> **检查对象**：[`d:\Gowin_fpga\edu\project\furuta_lqr_ctrl`](file:///d:/Gowin_fpga/edu/project/furuta_lqr_ctrl)
-> **代码基线**：`main` @ **`0f594e9`**（功能分支 `feat/f13b-dynamics-hil-closed-loop` 已 fast-forward 合并并删除；缺陷修复的最后一个提交为 `f97ecc5`）
-> **对标赛题**：[`选题一_基于FPGA的实时姿态控制系统.md`](file:///c:/Users/28399/Desktop/赛道/选题一_基于FPGA的实时姿态控制系统.md)
-> **报告日期**：2026-09-12
+> **检查对象**：[`C:\Users\28399\Desktop\赛道\furuta_lqr_ctrl`](../../furuta_lqr_ctrl)
+> **代码基线**：`main` @ **`1aa5f2c`**（功能分支 `feat/f13b-dynamics-hil-closed-loop` 已 fast-forward 合并并删除；缺陷修复的最后一个提交为 `f97ecc5`，其后两个提交为构建脚本入库与仓库迁移适配）
+> **仓库位置**：`C:\Users\28399\Desktop\赛道\furuta_lqr_ctrl` —— 嵌套于文档仓库内的**独立 git 仓库**（不是 submodule）
+> **⚠️ 工具链约束**：该路径含中文，Gowin 与 ModelSim **均无法直接运行**，必须经 `eda.ps1` 调用（详见 §7.2 与踩坑记录 A9）
+> **对标赛题**：[`选题一_基于FPGA的实时姿态控制系统.md`](../../赛题要求和芯片数据手册/选题一_基于FPGA的实时姿态控制系统.md)
+> **报告日期**：2026-09-12（2026-09-13 更新：仓库迁入文档目录、工具链适配与 §7 复现命令）
 > **证据来源**：Gowin EDA V1.9.12.03 综合/PnR/时序报告实读 + ModelSim 四 TB 全量回归实跑 + Python 逐位定点复现 + CodeReview 子 agent 独立审查
 > **本文所有数值均为实测**
 
@@ -43,7 +45,7 @@
 
 ---
 
-## 一、本轮完成的 9 个提交
+## 一、本轮完成的 10 个提交
 
 | commit | 主题 | 验证结果 |
 | :--- | :--- | :--- |
@@ -56,6 +58,7 @@
 | `15de660` | LQI 积分分离：窗口外**冻结**而非清零（M1） | `alpha_int_q16` 208 → **−2002**；稳态误差 1.1017° → **0.2302°** |
 | `f97ecc5` | 单元 TB 补 e_kin/e_pot 数值断言 + 负向 θ̇ 覆盖（M3） | 用例 48 → **52**，0 失败 |
 | `0f594e9` | 构建脚本 `build.tcl` 移出被忽略的 `impl/`，使本报告 §7.2 的复现命令在克隆后可用 | 新位置重跑：exit 0、top = `j280_hw_top`、Fmax **62.352 MHz**（与原位置完全一致） |
+| `1aa5f2c` | 仓库迁入本目录后的工具链适配：`build.tcl` 改为 `[info script]` 自定位，新增 `eda.ps1` 统一入口（自动维护 ASCII junction） | 经 junction 重测：综合 exit 0 / Fmax **62.352 MHz** / 违例 0-0；回归 **73 PASS / 1 FAIL**——与迁移前**逐项一致** |
 
 > **一处需更正的记录**：`f97ecc5` 的提交信息写的是 "62 vectors (was 53)"，**该数字有误**。源码实际 `check_case` / `check_case_full` 调用共 **50** 处，加 Batch 4 的 2 条手动断言 = **52 个用例**（改前为 48）。TB 自身汇总行打印的 `总用例数 = 52, 失败数 = 0` 与此一致。提交已合并入 main，不改写历史，特此在本报告中更正。
 
@@ -205,7 +208,7 @@ DSP        | 17.5/20     | 88%   (MULT18X18×7, MULTALU36X18×12, MULTADDALU18X1
 | # | 待确认项 | 若不成立的后果 |
 | :---: | :--- | :--- |
 | **R6** | 板载晶振是否确为 **50 MHz** | 1ms 节拍、SPI 2.5MHz 分频、PWM 20kHz 载波全部偏移；`TIMER_1MS_LIMIT` 需同步修改 |
-| **R7** | 摆杆角度传感器**确切型号** | [`angle_sensor_reader.v`](file:///d:/Gowin_fpga/edu/project/furuta_lqr_ctrl/src/angle_sensor_reader.v) 硬编码 `adc_latch <= shift_reg[11:0]` 且无 MOSI：**MCP3201** 首 bit 为 null、数据在 `shift_reg[12:1]` → 位对齐错误；**AS5048A/TLE5012B** 必须发命令字 → 当前单向 SPI 无法工作；**ADS7886** 需核对是否多采 4 bit |
+| **R7** | 摆杆角度传感器**确切型号** | [`angle_sensor_reader.v`](../../furuta_lqr_ctrl/src/angle_sensor_reader.v) 硬编码 `adc_latch <= shift_reg[11:0]` 且无 MOSI：**MCP3201** 首 bit 为 null、数据在 `shift_reg[12:1]` → 位对齐错误；**AS5048A/TLE5012B** 必须发命令字 → 当前单向 SPI 无法工作；**ADS7886** 需核对是否多采 4 bit |
 | **R8** | 电机驱动是否确为 **TB6612FNG** | 决定 `stby_out = motor_en \| brake_mode` 的正确性与 STBY 引脚连接 |
 | **R9** | **J280 底板原理图 / 引脚分配表** | CST 的 20 个引脚在 PG484 封装中合法（PnR 已接受、Vccio 匹配、clk 落在 GCLKT_2），但**是否对应底板实际连线无法由 EDA 工具验证**。DS102 为芯片级手册，不含底板连线信息 |
 | **R10** | 电机供电是否确为 **12 V** | `VOLT_TO_PWM_18 = 85333` 与起摆核 `×15` 系数（= `J0/(km×12V)×1000`）均基于 12V；若为 24V 则增益翻倍，两者需同步重算 |
@@ -308,12 +311,17 @@ DSP        | 17.5/20     | 88%   (MULT18X18×7, MULTALU36X18×12, MULTADDALU18X1
 
 | 仓库 | 分支 | HEAD | 状态 |
 | :--- | :--- | :--- | :--- |
-| `d:\Gowin_fpga\edu\project\furuta_lqr_ctrl` | `main` | **`0f594e9`** | 工作区干净；功能分支 `feat/f13b-dynamics-hil-closed-loop` 已 fast-forward 合并并删除 |
-| `c:\Users\28399\Desktop\赛道` | `main` | 本报告提交 | 工作区干净 |
+| `C:\Users\28399\Desktop\赛道\furuta_lqr_ctrl` | `main` | **`1aa5f2c`** | 工作区干净；共 17 个提交；功能分支 `feat/f13b-dynamics-hil-closed-loop` 已 fast-forward 合并并删除 |
+| `C:\Users\28399\Desktop\赛道` | `main` | 本报告提交 | 工作区干净；`.gitignore` 已排除 `furuta_lqr_ctrl/` |
 
-本轮合并入 main 的 9 个提交（fast-forward，无合并提交）：
+> **嵌套仓库约定**：两个仓库物理嵌套但各自独立，**不是 submodule**。切勿在文档仓库里
+> `git add furuta_lqr_ctrl`：那会把它记成 gitlink，克隆者只得到空目录，且 RTL 的 17 个提交
+> 历史（五轮迭代的完整证据链）无法传递。
+
+本轮合并入 main 的 10 个提交（fast-forward，无合并提交）：
 
 ```
+1aa5f2c  build: make the toolchain work from a non-ASCII repository path (eda.ps1)
 0f594e9  chore(build): move the Gowin command-line build script out of the ignored impl/ dir
 f97ecc5  test(swingup): assert e_kin/e_pot numerically and cover the negative dtheta path (M3)
 15de660  fix(lqi): freeze the integrator outside the separation window instead of clearing it (M1)
@@ -327,30 +335,43 @@ bd8d8e7  test(hil): add F13-b closed-loop hardware-in-the-loop platform
 
 ### 7.2 如何复现全部验证结果
 
+> ⚠️ **必须用 `eda.ps1`，不要直接调 `run_all.bat` 或 `gw_sh.exe`。**
+> 仓库位于含中文的路径下，两个 EDA 工具都会失败：Gowin 报 `ERROR (SP0002) Corrupted project file`；
+> ModelSim 报 sqlite `DATABASE ERROR` + `INTERNAL ERROR` 却**返回退出码 0**（失败伪装成成功）。
+> `eda.ps1` 会自动创建并维护一个纯 ASCII 的 NTFS junction（`C:\fpga_build` → 真实仓库），
+> 产物仍落在真实目录。完整机理见踩坑记录 **A9**。
+
 **仿真回归**（约 5 分钟，含 12 s 物理时长的 HIL）：
 
-```bat
-cd d:\Gowin_fpga\edu\project\furuta_lqr_ctrl\sim_modelsim
-run_all.bat
-echo %ERRORLEVEL%      REM 0 = 全通过, 1 = 有判据失败, 2 = vsim 进程本身出错
+```powershell
+cd C:\Users\28399\Desktop\赛道\furuta_lqr_ctrl
+.\eda.ps1 regress
+$LASTEXITCODE          # 0 = 全通过, 1 = 有判据失败, 2 = vsim 进程本身出错
 ```
 
-分步日志分别写入 `_s1.log`~`_s5.log`（已被 `.gitignore` 忽略）。若需跑 65 s 长时间验收（R2）：
+分步日志写入 `sim_modelsim\_s1.log`~`_s5.log`（已被 `.gitignore` 忽略）。若需跑 65 s 长时间验收（R2）：
 
-```bat
-set HIL_ARGS=+HIL_CTRL_CYCLES=65000
-run_all.bat
+```powershell
+$env:HIL_ARGS = "+HIL_CTRL_CYCLES=65000"
+.\eda.ps1 regress
 ```
 
 **综合与布局布线**（约 1 分钟）：
 
 ```powershell
-cd d:\Gowin_fpga\edu\project\furuta_lqr_ctrl
-$env:PATH="D:\Gowin_fpga\Gowin\Gowin_V1.9.12.03_x64\IDE\bin;$env:PATH"
-gw_sh.exe build.tcl
+cd C:\Users\28399\Desktop\赛道\furuta_lqr_ctrl
+.\eda.ps1 build
+$LASTEXITCODE          # 0 = 成功
 ```
 
-该脚本已入库（项目根目录），头部列出了应检查的产出文件与 `f97ecc5` 基线的实测验收值，便于重跑后直接比对。
+脚本会自动打印验收要点（top module / warning 数 / Fmax / 违例 / bitstream 时间戳）并与基线对比。
+底层仍是 `gw_sh.exe build.tcl`，该脚本已改为用 `[file dirname [info script]]` 自定位，**不含任何指向本仓库的绝对路径**。
+
+**自检**（换机器、换路径、或怀疑环境有问题时先跑这个）：
+
+```powershell
+.\eda.ps1 doctor       # junction 状态 / 路径 ASCII 性 / 两条工具链 / 关键文件 / modelsim.ini 是否被污染
+```
 
 产出：`impl/gwsynthesis/furuta_lqr_ctrl.log`（综合）、`impl/pnr/furuta_lqr_ctrl.rpt.txt`（资源与引脚）、`impl/pnr/furuta_lqr_ctrl_tr_content.html`（时序）、`impl/pnr/furuta_lqr_ctrl.fs`（bitstream）。
 
@@ -381,7 +402,7 @@ Step 5/5  furuta_hil_tb (闭环 HIL)      -> 8 PASS / 1 FAIL / HIL RESULT: FAIL 
 **下板前的两项必要工作**：
 
 - 澄清 §5.3 的 5 项硬件信息（尤其 **R7 角度传感器型号** 与 **R9 底板引脚表**）——这两项直接决定 SPI 能否读到正确数据、引脚能否对上实际连线，**无法由 EDA 工具代替验证**；
-- 按 [`J280套件硬件实物检测与校准实操指南.md`](file:///c:/Users/28399/Desktop/赛道/doc/J280套件硬件实物检测与校准实操指南.md) 第〇章 SOP 逐步上电：上电前 `sw_motor_en=0` → 扶直摆杆 → 长按 KEY1 标定 → 转臂归零后短按 KEY2 → 拨 `sw_motor_en=1` 自动起摆。
+- 按 [`J280套件硬件实物检测与校准实操指南.md`](../human/J280套件硬件实物检测与校准实操指南.md) 第〇章 SOP 逐步上电：上电前 `sw_motor_en=0` → 扶直摆杆 → 长按 KEY1 标定 → 转臂归零后短按 KEY2 → 拨 `sw_motor_en=1` 自动起摆。
 
 ---
 
@@ -393,4 +414,4 @@ Step 5/5  furuta_hil_tb (闭环 HIL)      -> 8 PASS / 1 FAIL / HIL RESULT: FAIL 
 | 二轮 | `596e996` | P0 真实解决；提出 F1~F15 |
 | 三轮 | `a8be230` | 11 项已修；提出 N1~N5（含致命定标错） |
 | 四轮 | `5dec1f8` | N1~N4 已修；提出 P1~P6 |
-| **五轮** | **`0f594e9`** | **HIL 闭环建成；起摆/平衡/抗扰首次实测 PASS；49 项编号缺陷全部关闭；余 R1~R15 共 15 项待办（其中 3 项为缺陷/隐患）** |
+| **五轮** | **`1aa5f2c`** | **HIL 闭环建成；起摆/平衡/抗扰首次实测 PASS；49 项编号缺陷全部关闭；余 R1~R15 共 15 项待办（其中 3 项为缺陷/隐患）；仓库迁入文档目录并适配工具链** |
