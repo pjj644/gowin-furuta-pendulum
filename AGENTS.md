@@ -16,8 +16,8 @@
 | **EDA 工具** | Gowin EDA **V1.9.12.03**（综合/PnR/bitstream）+ ModelSim **SE-64 10.7**（仿真） |
 | **当前状态** | ✅ 赛题基础要求 1/2/3 **已闭环实测达成**；拓展要求 3 达成；⚠️ 拓展要求 1 精度差 0.03°；⚠️ 拓展要求 2 仅算法级验算 |
 | **权威源码** | `furuta_lqr_ctrl\`（本目录下**嵌套的独立 git 仓库**，`main @ 1aa5f2c`） |
-| **文档仓库** | `C:\Users\28399\Desktop\赛道`（`.gitignore` 已排除 RTL 子仓库） |
-| **⚠️ EDA 路径约束** | 本路径含中文，**Gowin 与 ModelSim 均无法直接运行**；必须经 ASCII junction `C:\fpga_build`，由 `furuta_lqr_ctrl\eda.ps1` 自动处理（见 §1.2） |
+| **文档仓库** | `C:\Users\28399\Desktop\GoWin`（`.gitignore` 已排除 RTL 子仓库） |
+| **路径状态** | 仓库已迁移至纯 ASCII 路径 `C:\Users\28399\Desktop\GoWin`，**Gowin 与 ModelSim 均已可直接原生运行**；`furuta_lqr_ctrl\eda.ps1` 自动直连（见 §1.2） |
 | **待办总览** | R1~R15，见 [`doc/agent/选题一_RTL代码合规性检查报告.md`](doc/agent/选题一_RTL代码合规性检查报告.md) §五 |
 
 ---
@@ -27,7 +27,7 @@
 一个工作区目录树，内含**两个独立的 git 仓库**（物理嵌套，但**不是** submodule）：
 
 ```
-C:\Users\28399\Desktop\赛道\            ← 文档仓库（git main）
+C:\Users\28399\Desktop\GoWin\            ← 文档仓库（git main）
 ├── AGENTS.md                          本文件
 ├── .gitignore                         已排除 furuta_lqr_ctrl/
 ├── doc\{human,agent}\                 文档（分类标准见 doc/README.md）
@@ -50,29 +50,23 @@ C:\Users\28399\Desktop\赛道\            ← 文档仓库（git main）
 且 RTL 的 17 个提交历史（五轮迭代的完整证据链）无法随之传递。
 **两个仓库各自 `git status` / `add` / `commit` / `log`。**
 
-### 1.2 ⚠️ EDA 工具无法在中文路径下运行 —— 统一用 `eda.ps1`
+### 1.2 EDA 路径状态与统一入口 `eda.ps1`
 
-目录名「赛道」含非 ASCII 字符，**两个 EDA 工具都会失败**（均为实测）：
+本项目曾因目录名含中文（`...\赛道\...`）导致 Gowin（读成 `??` 报 SP0002 错误）与 ModelSim（SQLite 打不开报错）无法直接运行。
+**现状**：工程根目录已重命名迁移至纯 ASCII 路径 **`C:\Users\28399\Desktop\GoWin`**。实测两个 EDA 工具均已支持直接原生运行。
 
-| 工具 | 症状 | 退出码 |
-| :--- | :--- | :---: |
-| Gowin | `ERROR (SP0002) : Corrupted project file`（路径中「赛道」被读成 `??`） | 1 |
-| ModelSim | `sqlite3_open ... DATABASE ERROR` + `mtilibWrite(): INTERNAL ERROR` | **0（失败却报成功）** |
-
-解法是一个纯 ASCII 的 NTFS junction：`C:\fpga_build` → 真实仓库。
-**`eda.ps1` 会自动创建并维护它**，因此正常使用无需关心细节：
+为了统一工具链调用并提供跨环境兼容性，推荐统一经由 PowerShell 脚本 `eda.ps1` 执行：
+- 若当前工作目录为纯 ASCII 路径（当前即为 `C:\Users\28399\Desktop\GoWin\furuta_lqr_ctrl`），`eda.ps1` **自动检测并直接使用真实路径**，无需任何额外配置；
+- 若未来工程被移动到含中文或特殊字符的路径，`eda.ps1` 内置的 NTFS junction（`C:\fpga_build`）**自动回退兜底机制**将自动接管。
 
 ```powershell
-cd C:\Users\28399\Desktop\赛道\furuta_lqr_ctrl
+cd C:\Users\28399\Desktop\GoWin\furuta_lqr_ctrl
 .\eda.ps1 build      # 综合 + PnR + 时序 + bitstream
 .\eda.ps1 regress    # ModelSim 全量回归（5 步）
-.\eda.ps1 doctor     # 自检：junction / 工具链 / 关键文件 / modelsim.ini
-.\eda.ps1 path       # 只打印应当使用的 ASCII 工作路径
+.\eda.ps1 doctor     # 自检：路径 ASCII 性 / 工具链 / 关键文件 / modelsim.ini
+.\eda.ps1 path       # 打印当前使用的工作路径
 ```
 
-junction 是文件系统层的别名，所以产物仍落在真实目录，git、相对路径
-（`compile.do` 里的 `../src/...`）与 `.gprj` 全部照常工作。若仓库日后移回纯 ASCII
-路径，`eda.ps1` 会自动识别并跳过 junction。
 详见 [`furuta_lqr_ctrl/eda.ps1`](furuta_lqr_ctrl/eda.ps1) 头部说明与踩坑记录 A9。
 
 ### 1.3 ⛔ `simulation/src_verilog/` 是历史副本，已漂移，禁止修改
@@ -173,14 +167,12 @@ junction 是文件系统层的别名，所以产物仍落在真实目录，git�
 ### 4.1 仿真回归（约 5 分钟）
 
 ```powershell
-cd C:\Users\28399\Desktop\赛道\furuta_lqr_ctrl
+cd C:\Users\28399\Desktop\GoWin\furuta_lqr_ctrl
 .\eda.ps1 regress
 $LASTEXITCODE          # 0=全通过  1=有判据失败  2=vsim 进程崩溃
 ```
 
-`eda.ps1 regress` 会先确保 ASCII junction 存在（§1.2），再在该路径下调用
-`sim_modelsim\run_all.bat`。**不要直接跑 `run_all.bat`**：从中文路径跑时 ModelSim 的
-work 库打不开，而且 `vlog` 仍会返回 0。
+`eda.ps1 regress` 会调用 `sim_modelsim\run_all.bat`（并自动检测路径兼容性）。
 
 **退出码语义**（务必检查，不要只看输出）：
 
@@ -202,14 +194,13 @@ $env:HIL_ARGS = "+HIL_CTRL_CYCLES=65000"
 ### 4.2 综合、布局布线、时序、bitstream（约 1 分钟）
 
 ```powershell
-cd C:\Users\28399\Desktop\赛道\furuta_lqr_ctrl
+cd C:\Users\28399\Desktop\GoWin\furuta_lqr_ctrl
 .\eda.ps1 build
 $LASTEXITCODE          # 0 = 成功
 ```
 
 脚本会自动打印验收要点（top module / warning 数 / Fmax / 违例 / bitstream 时间戳）
-并与基线对比。底层仍是 `gw_sh.exe build.tcl`，但**必须经 junction 路径执行**（§1.2）：
-直接从中文路径跑会得到 `ERROR (SP0002) Corrupted project file`。
+并与基线对比。底层调用 `gw_sh.exe build.tcl`。
 
 产出（`impl/` 整个目录被 `.gitignore` 忽略）：
 
@@ -266,7 +257,7 @@ I/O       20/320      (7%)      引脚约束 20/20
 ### 4.4 Python 黄金模型
 
 ```powershell
-cd C:\Users\28399\Desktop\赛道\simulation
+cd C:\Users\28399\Desktop\GoWin\simulation
 python test_suite.py        # 6 项算法级验证
 python run_simulation.py    # 全流程仿真 + 出图
 ```

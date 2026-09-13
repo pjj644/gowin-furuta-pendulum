@@ -152,7 +152,7 @@ H 桥（H-Bridge）是由 4 个大功率开关管（通常为 MOSFET）组成的
 
 ### 2.4 `motor_pwm_driver.v` 逐行代码与逻辑深度精解
 
-该模块位于 [`C:\Users\28399\Desktop\赛道\furuta_lqr_ctrl\src\motor_pwm_driver.v`](../../furuta_lqr_ctrl/src/motor_pwm_driver.v)：
+该模块位于 [`C:\Users\28399\Desktop\GoWin\furuta_lqr_ctrl\src\motor_pwm_driver.v`](../../furuta_lqr_ctrl/src/motor_pwm_driver.v)：
 
 #### 1. 周期与比较阈值计算
 系统时钟为板载 50MHz（周期 20ns），PWM 目标频率为 20kHz（周期 50μs）：
@@ -265,7 +265,7 @@ B 相: ___|ˉˉˉ|___|ˉˉˉ|___|ˉˉˉ|___
 ---
 
 ### 3.5 `encoder_quad_reader.v` 逐行代码与逻辑深度精解
-该模块位于 [`C:\Users\28399\Desktop\赛道\furuta_lqr_ctrl\src\encoder_quad_reader.v`](../../furuta_lqr_ctrl/src/encoder_quad_reader.v)：
+该模块位于 [`C:\Users\28399\Desktop\GoWin\furuta_lqr_ctrl\src\encoder_quad_reader.v`](../../furuta_lqr_ctrl/src/encoder_quad_reader.v)：
 * **输入输出**：50MHz 时钟、复位、外部 A/B/Z 引脚、1ms 控制使能 `calc_en`；
 * **核心输出**：
   - `pulse_count`：32 位有符号绝对位置（顺时针累加，逆时针累减）；
@@ -345,7 +345,7 @@ theta_err_q16 <= (diff_unwrapped * 32'sd411775) >>> 12;
 ---
 
 ### 4.5 `angle_sensor_reader.v` 逐行代码与逻辑深度精解
-该模块位于 [`C:\Users\28399\Desktop\赛道\furuta_lqr_ctrl\src\angle_sensor_reader.v`](../../furuta_lqr_ctrl/src/angle_sensor_reader.v)：
+该模块位于 [`C:\Users\28399\Desktop\GoWin\furuta_lqr_ctrl\src\angle_sensor_reader.v`](../../furuta_lqr_ctrl/src/angle_sensor_reader.v)：
 * 内置 4 状态 SPI 主机状态机（`IDLE`, `START`, `XFER`, `FINISH`）；
 * 支持外部直接数据旁路模式 `ext_raw_valid`（便于仿真和板载并行 ADC 切换）；
 * 每 1ms 完成一次采样并自动计算差分角速度 `dtheta_q16` 并经一阶 IIR 滤波滤除 ADC 量化白噪声。

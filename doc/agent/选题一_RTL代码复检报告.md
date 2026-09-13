@@ -1,6 +1,6 @@
 # 选题一 RTL 代码复检报告（第四轮 · 优化收尾）
 
-> **复检对象**：[`C:\Users\28399\Desktop\赛道\furuta_lqr_ctrl`](../../furuta_lqr_ctrl)
+> **复检对象**：[`C:\Users\28399\Desktop\GoWin\furuta_lqr_ctrl`](../../furuta_lqr_ctrl)
 > **复检基线**：`5dec1f8`（第四轮复检起点）→ **`1652e59`**（本轮优化收尾）
 > **对标赛题**：[`选题一_基于FPGA的实时姿态控制系统.md`](../../赛题要求和芯片数据手册/选题一_基于FPGA的实时姿态控制系统.md)
 > **前序报告**：第三轮复检报告（已随 `b5e5ec4` 归档，本文覆盖更新）
@@ -328,7 +328,7 @@ DSP        | 17.5/20     | 88%   (MULT18X18×7, MULTALU36X18×12, MULTADDALU18X1
 
 ### 5.2 实施方案
 
-将 [`simulation/dynamics.py`](file:///c:/Users/28399/Desktop/赛道/simulation/dynamics.py) 的欧拉-拉格朗日方程移植为 Verilog 行为级被控对象模型：
+将 [`simulation/dynamics.py`](file:///c:/Users/28399/Desktop/GoWin/simulation/dynamics.py) 的欧拉-拉格朗日方程移植为 Verilog 行为级被控对象模型：
 
 | 要素 | 设计 |
 | :--- | :--- |

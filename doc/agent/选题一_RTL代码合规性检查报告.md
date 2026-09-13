@@ -1,9 +1,9 @@
 # 选题一 RTL 代码合规性检查报告（第五轮 · 阶段收尾）
 
-> **检查对象**：[`C:\Users\28399\Desktop\赛道\furuta_lqr_ctrl`](../../furuta_lqr_ctrl)
+> **检查对象**：[`C:\Users\28399\Desktop\GoWin\furuta_lqr_ctrl`](../../furuta_lqr_ctrl)
 > **代码基线**：`main` @ **`1aa5f2c`**（功能分支 `feat/f13b-dynamics-hil-closed-loop` 已 fast-forward 合并并删除；缺陷修复的最后一个提交为 `f97ecc5`，其后两个提交为构建脚本入库与仓库迁移适配）
-> **仓库位置**：`C:\Users\28399\Desktop\赛道\furuta_lqr_ctrl` —— 嵌套于文档仓库内的**独立 git 仓库**（不是 submodule）
-> **⚠️ 工具链约束**：该路径含中文，Gowin 与 ModelSim **均无法直接运行**，必须经 `eda.ps1` 调用（详见 §7.2 与踩坑记录 A9）
+> **仓库位置**：`C:\Users\28399\Desktop\GoWin\furuta_lqr_ctrl` —— 嵌套于文档仓库内的**独立 git 仓库**（不是 submodule）
+> **路径状态**：工程已迁移至纯 ASCII 路径，Gowin 与 ModelSim 均可直接原生运行，推荐统一经 `eda.ps1` 调用（详见 §7.2 与踩坑记录 A9）
 > **对标赛题**：[`选题一_基于FPGA的实时姿态控制系统.md`](../../赛题要求和芯片数据手册/选题一_基于FPGA的实时姿态控制系统.md)
 > **报告日期**：2026-09-12（2026-09-13 更新：仓库迁入文档目录、工具链适配与 §7 复现命令）
 > **证据来源**：Gowin EDA V1.9.12.03 综合/PnR/时序报告实读 + ModelSim 四 TB 全量回归实跑 + Python 逐位定点复现 + CodeReview 子 agent 独立审查
@@ -311,8 +311,8 @@ DSP        | 17.5/20     | 88%   (MULT18X18×7, MULTALU36X18×12, MULTADDALU18X1
 
 | 仓库 | 分支 | HEAD | 状态 |
 | :--- | :--- | :--- | :--- |
-| `C:\Users\28399\Desktop\赛道\furuta_lqr_ctrl` | `main` | **`1aa5f2c`** | 工作区干净；共 17 个提交；功能分支 `feat/f13b-dynamics-hil-closed-loop` 已 fast-forward 合并并删除 |
-| `C:\Users\28399\Desktop\赛道` | `main` | 本报告提交 | 工作区干净；`.gitignore` 已排除 `furuta_lqr_ctrl/` |
+| `C:\Users\28399\Desktop\GoWin\furuta_lqr_ctrl` | `main` | **`1aa5f2c`** | 工作区干净；共 17 个提交；功能分支 `feat/f13b-dynamics-hil-closed-loop` 已 fast-forward 合并并删除 |
+| `C:\Users\28399\Desktop\GoWin` | `main` | 本报告提交 | 工作区干净；`.gitignore` 已排除 `furuta_lqr_ctrl/` |
 
 > **嵌套仓库约定**：两个仓库物理嵌套但各自独立，**不是 submodule**。切勿在文档仓库里
 > `git add furuta_lqr_ctrl`：那会把它记成 gitlink，克隆者只得到空目录，且 RTL 的 17 个提交
@@ -335,16 +335,13 @@ bd8d8e7  test(hil): add F13-b closed-loop hardware-in-the-loop platform
 
 ### 7.2 如何复现全部验证结果
 
-> ⚠️ **必须用 `eda.ps1`，不要直接调 `run_all.bat` 或 `gw_sh.exe`。**
-> 仓库位于含中文的路径下，两个 EDA 工具都会失败：Gowin 报 `ERROR (SP0002) Corrupted project file`；
-> ModelSim 报 sqlite `DATABASE ERROR` + `INTERNAL ERROR` 却**返回退出码 0**（失败伪装成成功）。
-> `eda.ps1` 会自动创建并维护一个纯 ASCII 的 NTFS junction（`C:\fpga_build` → 真实仓库），
-> 产物仍落在真实目录。完整机理见踩坑记录 **A9**。
+> **建议统一用 `eda.ps1` 进行构建与回归**。
+> 工程已迁移至纯 ASCII 路径 `C:\Users\28399\Desktop\GoWin`，两个 EDA 工具均可直接原生运行，`eda.ps1` 会自动直连；若未来迁移至非 ASCII 路径，`eda.ps1` 会自动启用纯 ASCII 的 NTFS junction（`C:\fpga_build`）兜底。完整机理见踩坑记录 **A9**。
 
 **仿真回归**（约 5 分钟，含 12 s 物理时长的 HIL）：
 
 ```powershell
-cd C:\Users\28399\Desktop\赛道\furuta_lqr_ctrl
+cd C:\Users\28399\Desktop\GoWin\furuta_lqr_ctrl
 .\eda.ps1 regress
 $LASTEXITCODE          # 0 = 全通过, 1 = 有判据失败, 2 = vsim 进程本身出错
 ```
@@ -359,7 +356,7 @@ $env:HIL_ARGS = "+HIL_CTRL_CYCLES=65000"
 **综合与布局布线**（约 1 分钟）：
 
 ```powershell
-cd C:\Users\28399\Desktop\赛道\furuta_lqr_ctrl
+cd C:\Users\28399\Desktop\GoWin\furuta_lqr_ctrl
 .\eda.ps1 build
 $LASTEXITCODE          # 0 = 成功
 ```
