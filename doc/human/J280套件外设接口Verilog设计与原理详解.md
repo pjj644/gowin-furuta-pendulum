@@ -1,40 +1,23 @@
 # J280 姿态控制系统竞赛套件 —— 外设接口 Verilog 设计与硬件原理解析全手册
 
 > **适用竞赛**：全国大学生嵌入式芯片与系统设计竞赛（FPGA 创新设计赛道 —— 选题一：基于 FPGA 的实时姿态控制系统）  
-> **核心板卡**：高云半导体晨熙家族第一代 FPGA（`GW2A-LV55PG484C8/I7`）  
+> **核心板卡**：高云半导体晨熙家族第一代 FPGA（`GW2A-LV55PG484C8/I7`，PBGA484，Speed Grade 8）  
 > **配套机械**：J280 姿态控制系统旋转倒立摆套件  
 > **读者定位**：初次接触电机驱动、光电正交编码器与高精度角度传感器的参赛队员与 FPGA 开发者  
 > **对应源码**：
 > - [`motor_pwm_driver.v`](../../furuta_lqr_ctrl/src/motor_pwm_driver.v) —— 直流电机 20kHz 高频 PWM 与 H 桥驱动发生器
 > - [`encoder_quad_reader.v`](../../furuta_lqr_ctrl/src/encoder_quad_reader.v) —— 电机编码器 4 倍频消抖滤波测速测角模块
-> - [`angle_sensor_reader.v`](../../furuta_lqr_ctrl/src/angle_sensor_reader.v) —— 摆杆 12-bit SPI ADC / 磁编码器零点校准与解卷绕模块
-> - [`j280_hw_top.v`](../../furuta_lqr_ctrl/src/j280_hw_top.v) —— 硬件系统顶层集成互联与安全保护模块
+> - [`angle_sensor_reader.v`](../../furuta_lqr_ctrl/src/angle_sensor_reader.v) —— 摆杆 12-bit SPI ADC / 磁编码器零点校准与 3 拍流水解卷绕模块
+> - [`j280_hw_top.v`](../../furuta_lqr_ctrl/src/j280_hw_top.v) —— 硬件系统顶层集成互联、采样同步与安全保护模块
 
 ---
 
 ## 目录
 1. [倒立摆硬件外设体系全景拓扑](#一倒立摆硬件外设体系全景拓扑)
-2. [外设一：直流有刷电机与 H 桥驱动原理与 Verilog 实现](#二外设一直流有刷电机与-h-桥驱动原理与-verilog-实现)
-   - [2.1 电机是怎么转动的？为什么不能直接接 FPGA 引脚？](#21-电机是怎么转动的为什么不能直接接-fpga-引脚)
-   - [2.2 什么是 H 桥？正转、反转、刹车与滑行机理](#22-什么是-h-桥正转反转刹车与滑行机理)
-   - [2.3 什么是 PWM？为什么必须选 20kHz 载波？](#23-什么是-pwm为什么必须选-20khz-载波)
-   - [2.4 `motor_pwm_driver.v` 逐行代码与逻辑深度精解](#24-motor_pwm_driverv-逐行代码与逻辑深度精解)
-3. [外设二：正交增量式光电编码器原理与 Verilog 实现](#三外设二正交增量式光电编码器原理与-verilog-实现)
-   - [2.1 编码器内部长什么样？AB 相正交脉冲是怎么产生的？](#31-编码器内部长什么样ab-相正交脉冲是怎么产生的)
-   - [2.2 为什么必须进行 4 倍频鉴相？方向是怎么判断的？](#32-为什么必须进行-4-倍频鉴相方向是怎么判断的)
-   - [2.3 为什么实物必须加硬件消抖滤波？电机电磁干扰分析](#33-为什么实物必须加硬件消抖滤波电机电磁干扰分析)
-   - [2.4 1ms 定时测速 M 法与一阶 IIR 平滑滤波原理](#34-1ms-定时测速-m-法与一阶-iir-平滑滤波原理)
-   - [2.5 `encoder_quad_reader.v` 逐行代码与逻辑深度精解](#35-encoder_quad_readerv-逐行代码与逻辑深度精解)
-4. [外设三：摆杆角度传感器与 12-bit ADC 原理与 Verilog 实现](#四外设三摆杆角度传感器与-12-bit-adc-原理与-verilog-实现)
-   - [4.1 倒立摆为什么需要绝对角度传感器？与电机编码器的根本区别](#41-倒立摆为什么需要绝对角度传感器与电机编码器的根本区别)
-   - [4.2 传感器类型：精密导电塑料电位器 vs 磁编码器](#42-传感器类型精密导电塑料电位器-vs-磁编码器)
-   - [4.3 SPI 串行总线通信时序（CS_N, SCLK, MISO）](#43-spi-串行总线通信时序cs_n-sclk-miso)
-   - [4.4 360° 越界解卷绕（Unwrapping）与垂直零点校准算法](#44-360-越界解卷绕unwrapping与垂直零点校准算法)
-   - [4.5 `angle_sensor_reader.v` 逐行代码与逻辑深度精解](#45-angle_sensor_readerv-逐行代码与逻辑深度精解)
-5. [系统级整合：`j280_hw_top.v` 顶层互联与安全闭环](#五系统级整合j280_hw_topv-顶层互联与安全闭环)
-   - [5.1 1ms (1000Hz) 控制节拍产生器](#51-1ms-1000hz-控制节拍产生器)
-   - [5.2 一键垂直零位自适应硬件锁存](#52-一键垂直零位自适应硬件锁存)
-   - [5.3 倾角超限急停自锁与 LQI 积分抗饱和](#53-倾角超限急停自锁与-lqi-积分抗饱和)
+2. [外设一：直流有刷电机与 H 桥驱动原理与 Verilog 实现 (`motor_pwm_driver.v`)](#二外设一直流有刷电机与-h-桥驱动原理与-verilog-实现)
+3. [外设二：正交增量式光电编码器原理与 Verilog 实现 (`encoder_quad_reader.v`)](#三外设二正交增量式光电编码器原理与-verilog-实现)
+4. [外设三：摆杆角度传感器与 12-bit ADC 原理与 Verilog 实现 (`angle_sensor_reader.v`)](#四外设三摆杆角度传感器与-12-bit-adc-原理与-verilog-实现)
+5. [系统级整合：`j280_hw_top.v` 顶层互联、采样同步与安全闭环](#五系统级整合j280_hw_topv-顶层互联采样同步与安全闭环)
 6. [Q12.16 定点数与实际物理量量纲换算完整字典](#六q1216-定点数与实际物理量量纲换算完整字典)
 
 ---
@@ -55,45 +38,52 @@ flowchart TB
         ADC_HW["摆杆转轴角度传感器<br/>(精密电位器/磁阻 + 12-bit ADC)"]
     end
 
-    subgraph GW2A["高云 GW2A-LV55 FPGA 内部逻辑"]
+    subgraph GW2A["高云 GW2A-LV55 FPGA 内部逻辑 (50MHz 系统时钟)"]
         subgraph MOD_IN["外设采集与信号处理模块"]
-            MOD_ENC["encoder_quad_reader.v<br/>8级数字消抖 + 4倍频<br/>1ms差分测速 + IIR平滑滤波"]
-            MOD_ANG["angle_sensor_reader.v<br/>硬件 SPI 主机 (2.5MHz)<br/>360°去卷绕 + 零点扣除 + 差分测速"]
+            MOD_ENC["encoder_quad_reader.v<br/>8级数字消抖 (160ns) + 4倍频<br/>1ms差分测速 + IIR平滑滤波<br/>32位脉冲计数器 + Z相支持"]
+            MOD_ANG["angle_sensor_reader.v<br/>硬件 SPI 主机 (2.5MHz)<br/>360°去卷绕 + 零点扣除<br/>3拍流水差分测速 + sample_done"]
         end
 
-        subgraph CORE["核心控制算法"]
-            HEARTBEAT["1ms (1000Hz) 控制心跳定时器"]
-            LQR["furuta_lqr_ctrl.v<br/>LQI 最优姿态自平衡乘加流水线<br/>(3级流水线, 60ns极速计算)"]
-            INT_LOGIC["转臂积分累加与跌落急停保护"]
+        subgraph CORE["核心控制算法链"]
+            HEARTBEAT["1ms (1000Hz) 控制心跳定时器<br/>TIMER_1MS_LIMIT = 50000"]
+            FSM["ctrl_fsm.v<br/>四态状态机仲裁<br/>HANGING / SWINGUP / BALANCE / PROTECT"]
+            SWING["swing_up_ctrl.v<br/>Lyapunov 能量泵起摆核<br/>64点 cos LUT + 4段折线 tanh"]
+            LQR["furuta_lqr_ctrl.v<br/>5状态 LQI 最优姿态自平衡核<br/>Q10增益定标 + 18位DSP乘法<br/>4级流水线, 80ns 确定性极速计算"]
+            TRAJ["traj_gen.v<br/>4模式轨迹发生器<br/>128点正弦 LUT + 0.05°/ms 平滑斜坡<br/>★ R1-A 3拍速度退饱和算法"]
+            INT_LOGIC["j280_hw_top.v 内部逻辑<br/>LQI 积分器抗饱和 (±10°外冻结)<br/>无乘除移位累加 + ±720°软限位"]
         end
 
         subgraph MOD_OUT["执行驱动模块"]
-            MOD_PWM["motor_pwm_driver.v<br/>20kHz 影子寄存器 PWM<br/>正反转/刹车/滑行逻辑"]
+            MOD_PWM["motor_pwm_driver.v<br/>20kHz 载波 + 250拍(5us)硬件死区<br/>双载波周期影子寄存器<br/>STBY = motor_en | brake_mode"]
         end
     end
 
     subgraph ACTUATOR["执行机构 (输出)"]
-        DRIVER["H 桥驱动芯片<br/>(TB6612FNG / A4950)"]
+        DRIVER["H 桥驱动芯片 (TB6612FNG / A4950)"]
         MOTOR["直流高速/永磁减速电机"]
     end
 
     %% 硬件物理连接
     ARM -.->|带动旋转| ENC_HW
     PEND -.->|角度偏转| ADC_HW
-    ENC_HW -->|A/B 正交 TTL 电平| MOD_ENC
+    ENC_HW -->|A/B/Z 正交 TTL 电平| MOD_ENC
     ADC_HW -->|SPI 总线 (MISO)| MOD_ANG
 
-    HEARTBEAT -->|1ms calc_en 脉冲| MOD_ENC
     HEARTBEAT -->|1ms calc_en 脉冲| MOD_ANG
-    HEARTBEAT -->|1ms calc_en 脉冲| LQR
+    MOD_ANG -->|sample_done 同步采样完成| MOD_ENC
+    MOD_ANG -->|sample_done 同步采样完成| FSM
+    MOD_ANG -->|sample_done 同步采样完成| INT_LOGIC
+    MOD_ANG -->|sample_done 同步采样完成| LQR
 
-    MOD_ENC -->|alpha (Q16 rad)<br/>dalpha (Q16 rad/s)| INT_LOGIC
-    MOD_ANG -->|theta (Q16 rad)<br/>dtheta (Q16 rad/s)| INT_LOGIC
+    MOD_ENC -->|alpha_rad_q16, dalpha_q16| INT_LOGIC
+    MOD_ANG -->|theta_err_q16, dtheta_q16| INT_LOGIC
+    MOD_ANG -->|theta_err_q16, dtheta_q16| SWING
+    TRAJ -->|alpha_ref_q16, dalpha_ref_q16| INT_LOGIC
 
-    INT_LOGIC -->|alpha_err, dalpha, alpha_int| LQR
+    INT_LOGIC -->|alpha_err, dalpha_err, alpha_int| LQR
     INT_LOGIC -->|theta_err, dtheta| LQR
 
-    LQR -->|pwm_duty [-1000, 1000]| MOD_PWM
+    FSM -->|仲裁输出 pwm_duty [-1000, 1000]| MOD_PWM
     MOD_PWM -->|PWM / DIR / IN1 / IN2 / STBY| DRIVER
     DRIVER -->|±12V 动力大电流| MOTOR
     MOTOR -->|扭矩驱动| ARM
@@ -104,63 +94,63 @@ flowchart TB
 ## 二、外设一：直流有刷电机与 H 桥驱动原理与 Verilog 实现
 
 ### 2.1 电机是怎么转动的？为什么不能直接接 FPGA 引脚？
-* **工作本质**：直流电机内部包含电枢线圈与永磁体。当电枢通入直流电流时，在安培力作用下产生电磁转矩，驱动转子旋转。输出扭矩与电流成正比：$\tau = K_t \cdot I$。
+* **工作本质**：直流电机内部包含电枢线圈与永磁体。当电枢通入直流电流时，在安培力作用下产生电磁转矩驱动转子旋转。输出扭矩与电流成正比：$\tau = K_t \cdot I$；
 * **为什么 FPGA 绝对不能直连电机？**
-  1. **驱动能力极其有限**：FPGA 的普通 I/O 引脚（如 LVCMOS33）最大输出电流通常只有 **4mA ~ 16mA**；
-  2. **电机电流需求极大**：倒立摆直流电机的额定工作电流在 **0.5A ~ 2.0A**，启动瞬间堵转冲击电流甚至可达 **3A ~ 5A**，直接相连会当场击穿烧毁 FPGA 芯片引脚！
-  3. **反电动势（Flyback / Back-EMF）高压击穿**：电机本质是一个强感性负载。断开瞬间，电感线圈两端会感应出高达几十伏的反向高压尖峰脉冲，必须通过专用的**驱动隔离芯片与续流二极管**进行保护。
+  1. **驱动能力极其有限**：FPGA 的普通 I/O 引脚（如 LVCMOS33）最大驱动电流仅 **4mA ~ 16mA**；
+  2. **电机电流需求极大**：倒立摆直流电机的额定工作电流在 **0.5A ~ 2.0A**，启动与急停瞬间堵转冲击电流甚至可达 **3A ~ 5A**，直接相连会当场击穿烧毁 FPGA 芯片引脚；
+  3. **反电动势（Back-EMF）高压击穿**：电机本质是一个强感性负载。断开瞬间，电感线圈两端会感应出高达几十伏的反向高压尖峰脉冲，必须通过专用的**驱动隔离芯片与续流二极管**进行保护。
 
 ---
 
 ### 2.2 什么是 H 桥？正转、反转、刹车与滑行机理
-H 桥（H-Bridge）是由 4 个大功率开关管（通常为 MOSFET）组成的“H”形拓扑电路。通过切换对角线开关管的通断，可以自由改变电机线圈两端的电压极性：
+H 桥（H-Bridge）是由 4 个大功率开关管（MOSFET）组成的“H”形拓扑电路：
 
 ```text
        +12V 电源 (VM)
          |         |
-      [ Q1 ]     [ Q3 ]    (高边 P-MOS / N-MOS)
+      [ Q1 ]     [ Q3 ]    (高边 MOS)
          |----+----|
               |
            ( M )  直流电机
               |
          |----+----|
-      [ Q2 ]     [ Q4 ]    (低边 N-MOS)
+      [ Q2 ]     [ Q4 ]    (低边 MOS)
          |         |
         GND       GND
 ```
 
-| 控制动作 | 导通的开关管 | 电机端子电压极性 | 物理现象与原理 |
-| :--- | :--- | :--- | :--- |
-| **正转 (Forward)** | **Q1 与 Q4 导通**，其余关断 | 左 (+) 右 (-) | 电流从左往右流过线圈，电机顺时针旋转； |
-| **反转 (Reverse)** | **Q3 与 Q2 导通**，其余关断 | 左 (-) 右 (+) | 电流从右往左流过线圈，电机逆时针旋转； |
-| **动态能耗制动 (Brake)** | **Q2 与 Q4 同时导通** (或 Q1/Q3 同时导通) | 两端短接到地 | **电机两个端子被短路！** 旋转的电机变成“发电机”，产生巨大的自感反向阻尼力矩，实现**瞬间刹车锁定**； |
-| **自由滑行 (Coast / Off)**| **4 个管子全部关断** | 高阻悬空态 (Hi-Z) | 电机端子断路，依靠机械轴承摩擦慢慢自然减速停下。 |
+| 控制动作 | 导通的开关管 | 电机端子电压极性 | TB6612 输入 (IN1, IN2) | 物理现象与原理 |
+| :--- | :--- | :---: | :---: | :--- |
+| **正转 (Forward)** | **Q1 与 Q4 导通** | 左 (+) 右 (-) | `IN1 = PWM, IN2 = 0` | 电流从左向右，转臂顺时针旋转； |
+| **反转 (Reverse)** | **Q3 与 Q2 导通** | 左 (-) 右 (+) | `IN1 = 0, IN2 = PWM` | 电流从右向左，转臂逆时针旋转； |
+| **动态能耗制动 (Brake)** | **Q2 与 Q4 同时导通** | 两端短接到地 | `IN1 = 1, IN2 = 1` | **电机两端被短路！** 旋转的电机变成“发电机”，自感反向阻尼力矩实现**瞬间锁死刹车**； |
+| **自由滑行 (Coast / Off)**| **4 个管子全部关断** | 高阻悬空态 (Hi-Z) | `IN1 = 0, IN2 = 0` | 电机两端断路，依靠机械摩擦缓慢自然减速。 |
 
 > [!CAUTION]
-> **严禁直通短路（Shoot-Through）**：绝对不能让同侧的 Q1 和 Q2（或 Q3 和 Q4）同时导通，否则 12V 供电直接短路到地，瞬间烧穿驱动板！商业芯片（如 TB6612 / A4950）内部集成了硬件死区时间（Dead-time）防直通保护。
+> **严禁直通短路（Shoot-Through）**：绝对不能让同侧的 Q1 和 Q2（或 Q3 和 Q4）同时导通，否则 12V 电源直接短路到 GND，瞬间烧毁驱动芯片！商业驱动芯片与驱动代码必须包含死区时间（Dead-time）保护。
 
 ---
 
 ### 2.3 什么是 PWM？为什么必须选 20kHz 载波？
-* **脉宽调制（PWM）**：直流供电电压恒定为 12V，无法输出连续的 3.7V、8.2V 等中间模拟电压。PWM 通过极快地开关 12V 电源，通过改变**高电平所占周期的百分比（占空比 Duty Cycle）**，使得电机两端的等效平均电压平滑可调：
+* **脉宽调制（PWM）**：直流电源供电电压恒定为 12V。PWM 通过以极高频率开关 12V 电源，改变**高电平所占周期的百分比（占空比 Duty Cycle）**，使得电机两端的等效平均电压平滑可调：
   $$V_{avg} = V_{bus} \times \frac{t_{on}}{T_{pwm}} = V_{bus} \times \text{Duty}$$
-* **为什么倒立摆系统 PWM 载波必须设在 20kHz？**
-  1. **消除刺耳的人耳啸叫**：人耳听觉极限频率在 $20\,\text{Hz} \sim 20\,\text{kHz}$。若使用常见的单片机 1kHz 或 5kHz PWM，电机线圈在交流磁场震荡下会发出极其尖锐刺耳的高频“蜂鸣尖叫声”，严重干扰现场答辩与调参；
-  2. **保证电感滤波电流平稳连续**：电机线圈内阻小、电感大。20kHz 周期仅 $50\,\mu\text{s}$，在这样短的时间内，电感电流几乎为平滑的一条直线（连续电流模式 CCM），力矩输出极其平滑无脉动，倒立摆平衡控制极其丝滑。
+* **为什么倒立摆系统 PWM 载波必须严格设在 20kHz？**
+  1. **彻底消除人耳啸叫**：人耳听觉极限在 $20\,\text{Hz} \sim 20\,\text{kHz}$。低于 20kHz 的载波（如 1kHz 或 8kHz）会使电机线圈发出刺耳的蜂鸣尖叫声；
+  2. **保证电感电流连续平稳**：电机线圈内阻小、电感大。20kHz 周期仅 $50\,\mu\text{s}$，在如此短的时间内，电感电流几乎为连续平滑的直线（连续导通模式 CCM），消除电磁力矩脉动，保障倒立摆平衡控制极其丝滑。
 
 ---
 
 ### 2.4 `motor_pwm_driver.v` 逐行代码与逻辑深度精解
 
-该模块位于 [`C:\Users\28399\Desktop\GoWin\furuta_lqr_ctrl\src\motor_pwm_driver.v`](../../furuta_lqr_ctrl/src/motor_pwm_driver.v)：
-
-#### 1. 周期与比较阈值计算
-系统时钟为板载 50MHz（周期 20ns），PWM 目标频率为 20kHz（周期 50μs）：
+#### 1. 周期与比较阈值计算（无除法器设计）
+系统时钟 50MHz（周期 20ns），PWM 目标频率 20kHz（周期 50μs）：
 $$\text{TIMER\_PERIOD} = \frac{50\,\text{MHz}}{20\,\text{kHz}} = 2500\,\text{时钟周期}$$
-我们的控制算法 `furuta_lqr_ctrl` 输出的 `pwm_duty` 范围为 $[-1000, +1000]$。换算关系：
-$$\text{compare\_val} = \frac{|\text{pwm\_duty}| \times 2500}{1000} = \frac{|\text{pwm\_duty}| \times 5}{2}$$
+输入 `pwm_duty` 范围为 $[-1000, +1000]$。换算比例为 $2500 / 1000 = 2.5$。
+为了消除 FPGA 内部运行时的除法器（缺陷 E4），代码采用 Q16 定点乘法预换算：
+$$\text{SCALE\_FACTOR\_Q16} = \frac{2500 \times 65536}{1000} = 163840$$
+$$\text{raw\_compare} = (\text{duty\_clamped} \times 163840) \gg 16$$
 
-#### 2. 无毛刺影子寄存器（Shadow Register）机制
+#### 2. 无毛刺影子寄存器（Shadow Register）
 ```verilog
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -170,7 +160,7 @@ always @(posedge clk or negedge rst_n) begin
     end else begin
         if (pwm_counter >= TIMER_PERIOD - 1) begin
             pwm_counter <= 16'd0;
-            // 只有当 PWM 计数器走到周期终点 (归零) 的瞬间，才更新 compare_val 和 dir_reg！
+            // 只有当 PWM 计数器走到周期谷底 (归零) 的瞬间，才更新比较值与方向！
             compare_val <= raw_compare[15:0];
             dir_reg     <= dir_detected;
         end else begin
@@ -180,13 +170,15 @@ always @(posedge clk or negedge rst_n) begin
 end
 ```
 > [!TIP]
-> **设计玄机**：如果在 PWM 计数器正走到一半（例如计数值 1200）时外部突变占空比把比较值改小为 800，计数器将错过匹配点一直数到溢出，导致这一周期电机输出异常的 100% 满偏波形，产生电磁爆震。**影子寄存器机制保证了占空比与方向永远只在 PWM 周期边界无缝平滑切换**。
+> **设计玄机**：若在计数器走到中间（如 1500）时外部突变占空比将比较值缩小为 1000，计数器将错过匹配点一路数到 2500 溢出，导致该周期输出 100% 满偏波形，产生电磁爆震。**影子寄存器保证占空比与方向永远只在载波周期边界无缝切换**。
 
-#### 3. 双模式引脚输出兼容
-模块同时驱动 `pwm_out + dir_out`（用于单极性驱动板）以及 `in1_out + in2_out`（直接兼容 J280 套件上的 TB6612FNG 芯片）：
-* **正转时**：`in1_out <= pwm_active; in2_out <= 1'b0;`
-* **反转时**：`in1_out <= 1'b0; in2_out <= pwm_active;`
-* **急停刹车时**：`in1_out <= 1'b1; in2_out <= 1'b1;`
+#### 3. TB6612FNG 专属 STBY 休眠引脚自适应控制
+```verilog
+assign stby_out = motor_en | brake_mode;
+```
+* 当系统使能运行（`motor_en=1`）时，`stby_out = 1` 芯片正常输出；
+* 当电机停机（`motor_en=0`）但要求动态能耗制动（`brake_mode=1`）时，**必须保持 `stby_out = 1`**，使 $IN1=1, IN2=1$ 的接地短路刹车真实生效；
+* 仅在停机且选择自由滑行（`brake_mode=0`）时，才拉低 `stby_out = 0` 进入高阻休眠。
 
 ---
 
@@ -194,8 +186,8 @@ end
 
 ### 3.1 编码器内部长什么样？AB 相正交脉冲是怎么产生的？
 套件水平转臂电机尾部装有一只 **1000 线增量式光电编码器**：
-1. **机械结构**：电动机转轴同轴带动一块精密的透光玻璃/金属码盘，码盘圆周上刻有 1000 条极其细微的等间距透光辐射狭缝；
-2. **光电对管与 90° 相位差**：在码盘两侧固定有发光二极管与光敏接收管。巧妙的是，传感器内有 **A 相与 B 相** 两个接收窗口，在空间机械安装位置上**故意错开了 1/4 个狭缝周期（电气相位差严格为 90°，即正交）**。
+1. **机械结构**：电动机转轴同轴带动一块精密的透光码盘，码盘圆周上刻有 1000 条极其细微的等间距辐射狭缝；
+2. **光电对管与 90° 相位差**：传感器内部设有 A 相与 B 相两组光电管，在空间安装位置上**故意错开了 1/4 个狭缝周期（电气相位差严格为 90°，即正交）**。
 
 ```text
 顺时针正转 (CW, A 相超前 B 相 90°):
@@ -212,198 +204,166 @@ B 相: ___|ˉˉˉ|___|ˉˉˉ|___|ˉˉˉ|___
 ---
 
 ### 3.2 为什么必须进行 4 倍频鉴相？方向是怎么判断的？
-* **传统单边沿计数的局限**：如果只在 A 相上升沿计数，电机转一圈只能计 1000 个数，分辨率仅为 $360^\circ / 1000 = 0.36^\circ$；
-* **四倍频（4x Quadrature Decoding）的巨大优势**：
-  - A 相有上升沿和下降沿（2 次跳变）；
-  - B 相也有上升沿和下降沿（2 次跳变）；
-  - 每一个机械狭缝周期内，A 和 B 组合共有 **4 次电平跳变状态**！
-  - 1000 线编码器经过 4 倍频后，电机转动一整圈产生 **4000 个脉冲（Counts Per Revolution, CPR）**！
-  - 测量角分辨率被暴增提升到：
-    $$\Delta \alpha = \frac{360^\circ}{4000} = 0.09^\circ = 0.00157\,\text{rad}$$
+* **四倍频（4x Quadrature Decoding）的原理**：
+  A 相包含上升沿与下降沿（2 次跳变），B 相也包含上升沿与下降沿（2 次跳变）。每个狭缝周期内共有 **4 次电平组合变化**。1000 线编码器经 4 倍频后，电机转动一整圈产生 **4000 个脉冲（Counts Per Revolution, CPR）**！
+* **测量角分辨率提升至**：
+  $$\Delta \alpha = \frac{360^\circ}{4000} = 0.09^\circ = 0.00157\,\text{rad}$$
 * **方向判别真值表（状态机转移）**：
   设上一时刻电平为 $(A_{prev}, B_{prev})$，当前电平为 $(A_{curr}, B_{curr})$：
-  - 若跳变序列为 `00->01`, `01->11`, `11->10`, `10->00`，说明为**顺时针正转，计数累加 +1**；
-  - 若跳变序列为 `00->10`, `10->11`, `11->01`, `01->00`，说明为**逆时针反转，计数递减 -1**；
-  - 若状态未改变，计数加 0；若发生同向突变（如 `00->11`），说明采样速度不足或发生故障。
+  - 若跳变序列为 `00->10`, `10->11`, `11->01`, `01->00`，判定为**正转，计数累加 +1**；
+  - 若跳变序列为 `00->01`, `01->11`, `11->10`, `10->00`，判定为**反转，计数递减 -1**；
+  - 其余未跳变或同时跳变（`00->11` 非法态）计数累加 0。
 
 ---
 
-### 3.3 为什么实物必须加硬件消抖滤波？电机电磁干扰分析
-> [!WARNING]
-> **工程血泪教训**：初学者最常犯的错误，就是将外部编码器 A/B 引脚直接连到上升沿触发器 `always @(posedge enc_a)`！
-> 在实物运行中，直流电机换向电刷不断打火，PWM 20kHz 快速开关会在长排线上感应出强烈的纳秒级高频尖峰电压毛刺。如果不做滤波，一个毛刺就会让寄存器误触发几十次甚至上千次，导致转臂位置计数器狂漂、电机失控打飞！
-
-**硬件级多重滤波防护机制**：
-1. **第一道防线：双级 D 触发器防亚稳态同步**：
-   外部编码器信号与 FPGA 50MHz 时钟异步。两级触发器串联彻底打掉亚稳态；
-2. **第二道防线：连续采样积分消抖低通滤波器**：
-   ```verilog
-   if (a_sync_reg[1] == a_filt) begin
-       a_filter_cnt <= 8'd0;
-   end else if (a_filter_cnt >= FILTER_CYCLES - 1) begin
-       a_filt       <= a_sync_reg[1];
-       a_filter_cnt <= 8'd0;
-   end else begin
-       a_filter_cnt <= a_filter_cnt + 1'b1;
-   end
-   ```
-   设定 `FILTER_CYCLES = 8`。只有当引脚电平稳定维持 8 个 50MHz 时钟周期（$8 \times 20\,\text{ns} = 160\,\text{ns}$）以上，内部信号才允许翻转。宽度小于 160ns 的高频电磁毛刺被 100% 滤除！
+### 3.3 为什么实物必须加硬件消抖滤波？
+电机换向电刷打火与 20kHz PWM 快速开关会在长排线上感应出高频毛刺。若直接使用沿触发器，毛刺将引发误计数导致转臂漂移。
+* **第一道防线：双级 D 触发器防亚稳态**（`a_sync_reg`）；
+* **第二道防线：连续积分消抖低通滤波器**：
+  ```verilog
+  if (a_sync_reg[1] == a_filt) begin
+      a_filter_cnt <= 8'd0;
+  end else if (a_filter_cnt >= FILTER_CYCLES - 1) begin
+      a_filt       <= a_sync_reg[1];
+      a_filter_cnt <= 8'd0;
+  end else begin
+      a_filter_cnt <= a_filter_cnt + 1'b1;
+  end
+  ```
+  设置 `FILTER_CYCLES = 8`（$8 \times 20\,\text{ns} = 160\,\text{ns}$）。电平必须稳定保持 160ns 以上才允许内部翻转，小于 160ns 的高频电磁尖峰被 100% 滤除。
 
 ---
 
-### 3.4 1ms 定时测速 M 法与一阶 IIR 平滑滤波原理
-* **M 法测速原理**：FPGA 内部心跳节拍为 $T_s = 1.0\,\text{ms}$。在每个 1ms 周期内：
-  $$\Delta \text{pulse} = \text{pulse\_count}[k] - \text{pulse\_count}[k-1]$$
-  水平转臂角速度计算公式：
-  $$\dot{\alpha}_{raw} = \frac{\Delta \text{pulse} \times (2\pi / 4000)}{0.001\,\text{s}} = \Delta \text{pulse} \times \frac{\pi}{2} \approx \Delta \text{pulse} \times 1.5707963\,\text{rad/s}$$
-* **为什么需要一阶 IIR 滤波？**
-  因为 M 法测速存在 $\pm 1$ 个脉冲的固有离散量化阶跃（若 1ms 差 1 个脉冲，速度就会产生 $1.57\,\text{rad/s}$ 的剧烈跳变）。
-  我们在硬件中实现一阶 IIR 数字低通滤波（对应 `config.py` 中的 35% 权重）：
-  $$\dot{\alpha}[k] = \dot{\alpha}[k-1] + 0.35 \times (\dot{\alpha}_{raw}[k] - \dot{\alpha}[k-1])$$
-  在 FPGA 中全定点整数运算，输出极其丝滑纯净的角速度！
-
----
-
-### 3.5 `encoder_quad_reader.v` 逐行代码与逻辑深度精解
-该模块位于 [`C:\Users\28399\Desktop\GoWin\furuta_lqr_ctrl\src\encoder_quad_reader.v`](../../furuta_lqr_ctrl/src/encoder_quad_reader.v)：
-* **输入输出**：50MHz 时钟、复位、外部 A/B/Z 引脚、1ms 控制使能 `calc_en`；
-* **核心输出**：
-  - `pulse_count`：32 位有符号绝对位置（顺时针累加，逆时针累减）；
-  - `alpha_rad_q16`：转换为 Q12.16 定点格式的弧度值；
-  - `dalpha_rad_s_q16`：滤波后的 Q12.16 格式角速度。
+### 3.4 32 位脉冲累加与 1ms M 法测速定点化 (`encoder_quad_reader.v`)
+* **32 位宽有符号计数器（修复 D5）**：
+  旧代码采用 16 位计数器，在转动数十圈后会发生溢出翻转。扩展至 32 位 signed 彻底消除溢出截断；
+* **角度变换（无除法器）**：
+  4000 CPR 对应 $2\pi\,\text{rad}$。$2\pi \times 65536 / 4000 = 102.9437$。
+  采用 18 位有符号常数乘以 1024 定标：$102.9437 \times 1024 = 105414$。
+  ```verilog
+  alpha_rad_q16 <= (pulse_cnt_18 * 18'sd105414) >>> 10;
+  ```
+  乘法位宽收敛在 MULT18X18 内，相对误差仅 $0.00033\%$；
+* **1ms M 法测速与一阶 IIR 滤波**：
+  在 1ms（0.001s）节拍下，脉冲增量 $\Delta P$ 换算为速度：
+  $$\dot{\alpha} = \frac{\Delta P}{0.001} \times \frac{2\pi}{4000} = \Delta P \times \frac{\pi}{2}$$
+  定点 Q16 系数：$(\pi / 2) \times 65536 = 102944$。
+  经过一阶 IIR 滤波（$\beta = 0.35$）：
+  $$\hat{\dot{\alpha}}_k = \hat{\dot{\alpha}}_{k-1} + 0.35 \times (\text{raw} - \hat{\dot{\alpha}}_{k-1})$$
+  其中 $0.35 \times 65536 = 22938$，完全消除硬件除法。
 
 ---
 
 ## 四、外设三：摆杆角度传感器与 12-bit ADC 原理与 Verilog 实现
 
 ### 4.1 倒立摆为什么需要绝对角度传感器？与电机编码器的根本区别
-* **电机编码器是“增量式（Relative）”的**：掉电后不知道当前转到了几度，必须从 0 重新开始数；
-* **摆杆必须使用“绝对式（Absolute）”角度传感器**：
-  倒立摆在自由下垂（自然静止）时倾角为 $180^\circ$（即 $\pm\pi\,\text{rad}$），在被甩到倒立顶点自平衡时倾角为 $0^\circ$。控制算法每一时刻都必须确切知道摆杆在 360° 空间内的**绝对真实姿态**！哪怕中途重启，也能立即读出角度，否则无法实施能量起摆。
+* **水平转臂**：关心的是相对电机的回转角和转速，掉电后转臂停在任意位置都可重新标定为零点，使用**增量式光电编码器**即可；
+* **垂直摆杆**：必须知道摆杆相对于**绝对垂直重力方向**的夹角！系统上电时摆杆自然下垂（$\theta = 180^\circ$），必须有一款能在上电瞬间直接给出绝对位置的**绝对式传感器**（精密电位器或磁编码器 + 12-bit ADC），否则无法判断摆杆在哪个象限，无法启动能量泵。
 
 ---
 
-### 4.2 传感器类型：精密导电塑料电位器 vs 磁编码器
-在 J280 套件及电赛倒立摆中，主要采用以下两种主流传感器：
-1. **方案 A：高精度 360° 连续回转导电塑料电位器 + 12-bit SPI ADC 芯片（最通用）**：
-   - 电位器中心抽头输出 $0\,\text{V} \sim 3.3\,\text{V}$ 的模拟连续线性电压；
-   - 由板载的高速 12-bit ADC 芯片（如 TI 的 ADS7886、Microchip 的 MCP3201/3202、或 TLC549）转换为 0~4095 的离散数字码，并通过 SPI 总线串行发给 FPGA；
-2. **方案 B：SPI 绝对式磁编码芯片（如 TLE5012B / AS5048A / AS5600）**：
-   - 摆杆旋转轴末端镶嵌一块径向对充磁铁，芯片内部霍尔阵列感应磁场向量，直接通过 SPI 串行接口输出 12 位或 14 位的当前角度数字值。
+### 4.2 2.5MHz 硬件 SPI 主机通信时序
+摆杆传感器通过 SPI 总线与 FPGA 相连：
+* `adc_cs_n`：片选引脚，低电平有效；
+* `adc_sclk`：同步串行时钟，空闲为低（Mode 0），频率 $2.5\,\text{MHz}$（时钟周期 400ns）；
+* `adc_miso`：从机串行数据输入，在 SCLK 上升沿采样数据。
+一帧传输 16 个 bit，耗时 $16 \times 400\,\text{ns} = 6.4\,\mu\text{s}$，提取低 12 位转换数据（码值范围 $0 \sim 4095$）。
 
 ---
 
-### 4.3 SPI 串行总线通信时序（CS_N, SCLK, MISO）
-SPI（Serial Peripheral Interface）是全双工高速同步串行接口。我们的 FPGA 作为 **SPI 主机（Master）**，ADC/磁传感器作为 **从机（Slave）**：
-* `spi_cs_n`（片选，低有效）：平常为高电平；拉低代表开始一次数据转换与传输；
-* `spi_sclk`（同步时钟）：FPGA 将 50MHz 主频分频为 **2.5MHz** 发送给从机；
-* `spi_miso`（从机输出数据）：在每个 `spi_sclk` 上升沿，FPGA 锁存采样该线上的 1 位数据，传输 16 个周期即可拼成完整的一帧 12 位数据字。
+### 4.3 360° 越界最短角位移解卷绕与 3 拍流水线 (`angle_sensor_reader.v`)
 
-```text
-CS_N : ˉˉ\________________________________________________/ˉˉˉ
-SCLK : ____/ˉ\_/ˉ\_/ˉ\_/ˉ\_/ˉ\_/ˉ\_/ˉ\_/ˉ\_/ˉ\_/ˉ\_/ˉ\_/ˉ\_____
-MISO : ----< D11 >< D10 >< D9  >< ...  >< D1  >< D0  >---------
+```
+ [SPI 采样完成 12-bit ADC] ──► active_raw_adc
+                                   │
+                                   ▼
+                   diff_raw = active_raw_adc - zero_offset
+                   若 diff_raw >  2047 -> diff - 4096 (映射到 -2048~2047)
+                   若 diff_raw < -2048 -> diff + 4096
+                                   │
+                                   ▼
+                   diff_rad = (diff_unwrapped × 411775) >>> 12
+                                   │
+ ┌─────────────────────────────────┴─────────────────────────────────┐
+ │ 流水拍 1 (20ns): 锁存当前角度，计算未解卷绕角度差                     │
+ │   theta_err_q16 <= current_theta_q16;                             │
+ │   diff_raw_r    <= current_theta_q16 - theta_prev_q16;            │
+ ├───────────────────────────────────────────────────────────────────┤
+ │ 流水拍 2 (40ns): ★ 最短角位移解卷绕 (杜绝 ±180° 边界 6283 rad/s 尖峰)  │
+ │   若 diff_raw_r >  pi ( 205887) -> diff - 2pi (411775)           │
+ │   若 diff_raw_r < -pi (-205888) -> diff + 2pi (411775)           │
+ │   raw_dtheta_q16 <= diff_theta_step × 1000;                       │
+ ├───────────────────────────────────────────────────────────────────┤
+ │ 流水拍 3 (60ns): 一阶 IIR 滤波平滑 + 发出 sample_done               │
+ │   dtheta_q16  <= dtheta_q16 + ((raw - dtheta) × 22938) >>> 16;   │
+ │   sample_done <= 1'b1;                                            │
+ └───────────────────────────────────────────────────────────────────┘
 ```
 
----
+#### ★ 为什么必须进行最短角位移解卷绕？（缺陷 M2 深度复盘）
+当摆杆起摆穿越悬垂点（$\pm 180^\circ$）时，角度采样值会从 $+179^\circ$ 突变到 $-179^\circ$（真实角位移仅 $2^\circ$）。
+如果直接做差分：
+$$\Delta \theta = -179^\circ - (+179^\circ) = -358^\circ \approx -6.248\,\text{rad}$$
+在 1ms 内直接乘以 1000，将产生高达 **$-6248\,\text{rad/s}$ 的伪大尖峰**！
+而摆杆物理真实速度仅约 $35\,\text{rad/s}$，尖峰为其 178 倍！IIR 滤波器会被严重污染达 20ms，直接摧毁起摆能量计算。
+**最短角位移解卷绕算法**在差值超出 $\pm \pi$ 时自动叠加或扣除 $2\pi$，将差分限制在最短物理路径内，伪尖峰实测彻底归零（判据 A2 验证通过）。
 
-### 4.4 360° 越界解卷绕（Unwrapping）与垂直零点校准算法
-12-bit ADC 的采样数据是正整数 $0 \sim 4095$（对应 $0^\circ \sim 360^\circ$）。在倒立摆控制中，必须解决两大关键数学转换：
-
-#### 1. 垂直零点扣除
-设摆杆垂直倒立（平衡点）时实测的 ADC 码值为 `zero_offset_raw`（例如 2048）：
-$$\text{diff} = \text{raw\_adc} - \text{zero\_offset\_raw}$$
-
-#### 2. 角度全圆周越界解卷绕（Unwrapping）
-当摆杆在垂直零位附近轻微左右晃动时，如果是零点附近的边界（例如零点在 0 附近，往左微偏会变成 4095），差值会出现 $-4090$ 到 $+5$ 的巨大突跳！
-我们在 Verilog 中使用全圆周模运算进行硬件平移：
-```verilog
-always @(*) begin
-    diff_raw = $signed({1'b0, active_raw_adc}) - $signed({1'b0, zero_offset_raw});
-    if (diff_raw > 13'sd2047) begin
-        diff_unwrapped = diff_raw - 13'sd4096; // 逆时针越过半周平移
-    end else if (diff_raw < -13'sd2048) begin
-        diff_unwrapped = diff_raw + 13'sd4096; // 顺时针越过半周平移
-    end else begin
-        diff_unwrapped = diff_raw;
-    end
-end
-```
-> [!IMPORTANT]
-> 经过解卷绕后，无论机械传感器安装时的绝对角度朝向如何，**`diff_unwrapped` 都会严格落在 $[-2048, +2047]$ 的区间内，且以垂直倒立位置严格为 0 点**！
-
-#### 3. 刻度转换为 Q12.16 定点弧度
-4096 个刻度对应 $2\pi\,\text{rad}$：
-$$\theta_{err} = \text{diff\_unwrapped} \times \frac{2\pi}{4096} = \text{diff\_unwrapped} \times 0.00153398\,\text{rad}$$
-在 Q16 格式下（乘 65536）：
-$$\text{scale} = \frac{2\pi \times 65536}{4096} = \frac{411774.8}{4096} \approx 100.531$$
-在 Verilog 中使用一条极简位移实现超高精度：
-```verilog
-theta_err_q16 <= (diff_unwrapped * 32'sd411775) >>> 12;
-```
+#### 时序流水线拆分依据
+解卷绕三选逻辑若与 64 位乘法串联，组合逻辑延时高达 19.9ns，使系统 Fmax 崩至 50.194MHz（裕量仅 0.39%）。
+将其拆分为严格的 **3 拍流水线**后，最差路径数据延时大幅降至 16.0ns，保障整体 Fmax 稳稳达到 **$65.849\,\text{MHz}$**。
 
 ---
 
-### 4.5 `angle_sensor_reader.v` 逐行代码与逻辑深度精解
-该模块位于 [`C:\Users\28399\Desktop\GoWin\furuta_lqr_ctrl\src\angle_sensor_reader.v`](../../furuta_lqr_ctrl/src/angle_sensor_reader.v)：
-* 内置 4 状态 SPI 主机状态机（`IDLE`, `START`, `XFER`, `FINISH`）；
-* 支持外部直接数据旁路模式 `ext_raw_valid`（便于仿真和板载并行 ADC 切换）；
-* 每 1ms 完成一次采样并自动计算差分角速度 `dtheta_q16` 并经一阶 IIR 滤波滤除 ADC 量化白噪声。
+## 五、系统级整合：`j280_hw_top.v` 顶层互联、采样同步与安全闭环
+
+硬件顶层模块 [`j280_hw_top.v`](../../furuta_lqr_ctrl/src/j280_hw_top.v) 负责整体协调调度：
+
+### 5.1 1ms 控制节拍与采样无偏差同步（修复 D6）
+* 内部由 `TIMER_1MS_LIMIT = 50000` 产生 1ms 控制脉冲启动 SPI 采样；
+* 当 SPI 采样、解卷绕与 IIR 滤波在第 3 拍完成时，`angle_sensor_reader` 发出单时钟周期高电平的 **`sample_done`** 信号；
+* 顶层所有下游模块（状态机、编码器测速锁存、LQI 积分器、流水线计算核）**全部由 `sample_done` 统一使能触发**！两轴采样时间差被硬件级彻底对齐在同一个纳秒时刻。
 
 ---
 
-## 五、系统级整合：`j280_hw_top.v` 顶层互联与安全闭环
-
-硬件顶层模块 [`j280_hw_top.v`](../../furuta_lqr_ctrl/src/j280_hw_top.v) 是将各大外设驱动与控制算法融为一体的枢纽：
-
-### 5.1 1ms (1000Hz) 控制节拍产生器
-倒立摆控制不能随意乱跑，必须严格运行在确定的时间离散网格上：
-```verilog
-localparam integer TIMER_1MS_LIMIT = 50_000_000 / 1000; // 50,000 个时钟
-always @(posedge clk_50m or negedge rst_n) begin
-    if (!rst_n) ...
-    else if (timer_1ms_cnt >= TIMER_1MS_LIMIT - 1) begin
-        timer_1ms_cnt <= 20'd0;
-        calc_en_pulse <= 1'b1; // 发出 1 个周期的 1ms 同步脉冲
-    end else ...
-end
-```
-`calc_en_pulse` 同时触发 ADC 启动采样、编码器计算瞬时速度、以及 LQR 核心执行 3 级硬件流水线计算。
+### 5.2 一键垂直零位自适应硬件锁存（SOP 前置）
+摆杆每次装配后均存在机械微小公差：
+1. 操作人员将摆杆手扶至铅垂线上；
+2. 长按核心板上的 `key_zero_calib`（KEY1）；
+3. 经 100 万时钟周期（20ms）防抖后，当前最新的 `raw_adc_data` 自动锁存进 `zero_offset_reg`；
+4. 板载指示灯 `led_calib_ok` 保持常亮，`calib_done` 置 1，放行状态机允许起摆。
 
 ---
 
-### 5.2 一键垂直零位自适应硬件锁存
-实物摆杆每次安装或移动后，垂直倒立点对应的 ADC 值会有微小偏差。如果每次都要看示波器查数据、修改 Verilog 重新全编译综合半小时，调参将极其痛苦！
-**本工程设计的硬件自校准机制**：
-1. 开发者用手将摆杆扶直在铅垂线上；
-2. 按一下开发板上的 `key_zero_calib` 按键；
-3. 顶层消抖后立即将当前最新的 `raw_adc_data` 锁存进 `zero_offset_reg` 寄存器；
-4. 板载指示灯 `led_calib_ok` 点亮，零位校准完毕！
+### 5.3 独立多模式轮换与位置清零（KEY2 复合功能）
+独立按键 KEY2 兼具短按与长按双重功能：
+* **短按（按键时长 $20\,\mu\text{s} \sim 70\,\text{ms}$）**：
+  状态机轮转切换轨迹模式（$0 \to 1 \to 2 \to 3 \to 0$），对应“0°平衡 $\to$ +45°斜坡 $\to$ -45°斜坡 $\to$ 0.2Hz正弦”；
+* **长按（按键时长 $\ge 70\,\text{ms}$）**：
+  发出 `clear_pos_pulse`，将光电编码器的 `pulse_count` 绝对值强制清零，用于对齐转臂起始基准。
 
 ---
 
-### 5.3 倾角超限急停自锁与 LQI 积分抗饱和
-1. **倾角超限跌落保护**：
-   ```verilog
-   localparam signed [31:0] FALL_ZONE_Q16 = 32'sd51472; // 约 45 度
-   wire is_fall_down = (theta_err_q16 > FALL_ZONE_Q16) || (theta_err_q16 < -FALL_ZONE_Q16);
-   wire signed [15:0] safe_pwm_duty = (sw_motor_en && !is_fall_down) ? lqr_pwm_duty : 16'sd0;
-   ```
-   如果摆杆偏离超过 $45^\circ$，说明已经倒下失控，系统立即强行切断电机 PWM 输出（置 0），防止转臂在桌面上狂甩打手或撞坏线缆；
-2. **LQI 积分抗饱和与积分分离**：
-   只有当摆角处于自平衡区（$|\theta| < 22^\circ$）时，才开启转臂位置误差累加积分，并将积分项严格钳位在 $[-0.25\,\text{rad}, +0.25\,\text{rad}]$，既消除了电机摩擦死区造成的静差，又杜绝了积分饱和冲出限位的问题。
+### 5.4 积分分离与抗饱和保护网
+* **积分累加**：仅在系统进入 BALANCE 平衡态且转臂误差处于 $\pm 10^\circ$（`INT_ERR_THRESH_Q16 = 11439`）之内时进行无乘除移位累加；
+* **窗口外冻结（M1）**：超出 $\pm 10^\circ$ 误差带时**冻结已有积分值不更新**，既杜绝大步长前冲过程中的积分恶性累加，又保护了斜坡跟踪所需的前馈补偿；
+* **饱和限幅**：积分项绝对值限制在 $\pm 0.25\,\text{rad}$（Q16: `±16384`）；
+* **转臂双向软限位（D3）**：当绝对位置超出 $\pm 2$ 整圈（$\pm 720^\circ$）时，`soft_limit_err` 置位切入停机，防止损坏机械结构。
 
 ---
 
 ## 六、Q12.16 定点数与实际物理量量纲换算完整字典
 
-在 FPGA 算法设计与信号监控（如使用高云 GAO 逻辑分析仪）时，物理真实值与 32-bit Q12.16 寄存器数值的换算标准如下：
+在调试观察高云 GAO 逻辑分析仪或 Modelsim 仿真波形时，物理量与 32 位有符号定点数换算如下：
 
-| 物理状态变量 | 实际物理单位 | 连续浮点典型范围 | Q12.16 定点整数计算公式 | 示例物理值 | 对应 16 进制 / 10 进制 Q16 码值 |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **摆杆倾角偏差 $\theta_{err}$** | $\text{rad}$ | $[-0.78, +0.78]$ | $\text{Val}_{Q16} = \theta \times 65536$ | $+0.100\,\text{rad} \approx 5.73^\circ$ | `32'd6554` (`0x0000199A`) |
-| **摆杆角速度 $\dot{\theta}$** | $\text{rad/s}$ | $[-8.0, +8.0]$ | $\text{Val}_{Q16} = \dot{\theta} \times 65536$ | $-2.50\,\text{rad/s}$ | `-32'sd163840` (`0xFFFD8000`) |
-| **转臂角位移 $\alpha_{err}$** | $\text{rad}$ | $[-\infty, +\infty]$ | $\text{Val}_{Q16} = \alpha \times 65536$ | $+1.5708\,\text{rad} \approx 90^\circ$ | `32'd102944` (`0x00019220`) |
-| **转臂角速度 $\dot{\alpha}$** | $\text{rad/s}$ | $[-15.0, +15.0]$ | $\text{Val}_{Q16} = \dot{\alpha} \times 65536$ | $+3.1416\,\text{rad/s}$ | `32'd205887` (`0x0003243F`) |
-| **LQI 转臂积分 $\int\alpha$** | $\text{rad}\cdot\text{s}$ | $[-0.25, +0.25]$ | $\text{Val}_{Q16} = \text{Int} \times 65536$ | $+0.25\,\text{rad}\cdot\text{s}$ (饱和上限) | `32'd16384` (`0x00004000`) |
-| **电机驱动输出 `pwm_duty`**| 无量纲千分比 | $[-1000, +1000]$ | 整数直读（符号位代表转向） | $+500$ (50% 占空比正转) | `16'sd500` (`0x01F4`) |
+| 物理状态变量 | 物理量纲 | 典型工作区间 | Q12.16 换算公式 | 示例物理值 | 对应 16 进制 / 10 进制 Q16 码值 |
+| :--- | :---: | :---: | :--- | :--- | :--- |
+| **摆杆倾角偏差 $\theta$** | $\text{rad}$ | $[-0.78, +0.78]$ | $\text{Val}_{Q16} = \theta \times 65536$ | $+0.100\,\text{rad} \approx 5.73^\circ$ | `32'd6554` (`0x0000199A`) |
+| **倒立平衡捕获门限** | $\text{deg}$ | $\pm 22.0^\circ$ | $\text{Val}_{Q16} = 0.38397 \times 65536$ | $\pm 22.0^\circ$ | `32'sd25164` (`0x0000624C`) |
+| **摆杆跌落急停门限** | $\text{deg}$ | $\pm 45.0^\circ$ | $\text{Val}_{Q16} = 0.78540 \times 65536$ | $\pm 45.0^\circ$ | `32'sd51472` (`0x0000C910`) |
+| **摆杆角速度 $\dot{\theta}$** | $\text{rad/s}$ | $[-32.0, +32.0]$ | $\text{Val}_{Q16} = \dot{\theta} \times 65536$ | $+17.151\,\text{rad/s}$ (起摆临界速度) | `32'sd1124008` (`0x001126A8`) |
+| **转臂角位移 $\alpha$** | $\text{rad}$ | $[-12.56, +12.56]$ | $\text{Val}_{Q16} = \alpha \times 65536$ | $+0.7854\,\text{rad} = +45^\circ$ | `32'sd51472` (`0x0000C910`) |
+| **转臂软限位保护** | $\text{deg}$ | $\pm 720.0^\circ$ | $\text{Val}_{Q16} = 4\pi \times 65536$ | $\pm 2$ 整圈 ($\pm 720^\circ$) | `32'sd823548` (`0x000C90FC`) |
+| **转臂角速度 $\dot{\alpha}$** | $\text{rad/s}$ | $[-15.0, +15.0]$ | $\text{Val}_{Q16} = \dot{\alpha} \times 65536$ | $+0.8698\,\text{rad/s}$ (斜坡标准巡航速度) | `32'sd57000` (`0x0000DE98`) |
+| **LQI 转臂位置积分** | $\text{rad}\cdot\text{s}$ | $[-0.25, +0.25]$ | $\text{Val}_{Q16} = \text{Int} \times 65536$ | $\pm 0.25\,\text{rad}\cdot\text{s}$ (饱和上限) | `32'sd16384` (`0x00004000`) |
+| **积分分离误差窗口** | $\text{deg}$ | $\pm 10.0^\circ$ | $\text{Val}_{Q16} = 0.17453 \times 65536$ | $\pm 10.0^\circ$ (窗口外冻结) | `32'sd11439` (`0x00002CAF`) |
+| **电机驱动 `pwm_duty`**| 千分比 | $[-1000, +1000]$ | 直读整数 (符号位代表方向) | $+250$ ($3.0\,\text{V}$ 起动死区突破脉冲) | `16'sd250` (`0x00FA`) |
