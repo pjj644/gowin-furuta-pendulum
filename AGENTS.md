@@ -15,7 +15,7 @@
 | **目标器件** | 高云 **GW2A-LV55PG484C8/I7**（GW2A-55C，PBGA484，speed grade 8） |
 | **EDA 工具** | Gowin EDA **V1.9.12.03**（综合/PnR/bitstream）+ ModelSim **SE-64 10.7**（仿真） |
 | **当前状态** | ✅ 赛题基础要求 1/2/3 **已闭环实测达成**；拓展要求 1/2/3 **全部闭环实测达成**（10/10 项判据全部 PASS） |
-| **权威源码** | `furuta_lqr_ctrl\`（本目录下**嵌套的独立 git 仓库**，`feat/r1-traj-precision @ 14645fa`） |
+| **权威源码** | `furuta_lqr_ctrl\`（本目录下**嵌套的独立 git 仓库**，`main @ 14645fa`） |
 | **文档仓库** | `C:\Users\28399\Desktop\GoWin`（`.gitignore` 已排除 RTL 子仓库） |
 | **路径状态** | 仓库已迁移至纯 ASCII 路径 `C:\Users\28399\Desktop\GoWin`，**Gowin 与 ModelSim 均已可直接原生运行**；`furuta_lqr_ctrl\eda.ps1` 自动直连（见 §1.2） |
 | **待办总览** | R1/R4 已闭环达成；剩余板级硬件澄清 R6~R10，见 [`doc/agent/选题一_RTL代码合规性检查报告.md`](doc/agent/选题一_RTL代码合规性检查报告.md) §五 |
