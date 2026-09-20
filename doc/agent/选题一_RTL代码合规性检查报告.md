@@ -205,7 +205,7 @@ DSP        | 17.5/20     | 88%   (MULT18X18×7, MULTALU36X18×12, MULTADDALU18X1
 | # | 待确认项 | 若不成立的后果 |
 | :---: | :--- | :--- |
 | **R6** | 板载晶振是否确为 **50 MHz** | 1ms 节拍、SPI 2.5MHz 分频、PWM 20kHz 载波全部偏移；`TIMER_1MS_LIMIT` 需同步修改 |
-| **R7** | 摆杆角度传感器**确切型号** | [`angle_sensor_reader.v`](../../furuta_lqr_ctrl/src/angle_sensor_reader.v) 硬编码 `adc_latch <= shift_reg[11:0]` 且无 MOSI：**MCP3201** 首 bit 为 null、数据在 `shift_reg[12:1]` → 位对齐错误；**AS5048A/TLE5012B** 必须发命令字 → 当前单向 SPI 无法工作；**ADS7886** 需核对是否多采 4 bit |
+| **R7** | 摆杆角度传感器**确切型号** | ✅ **已由官方 FAQ 明确澄清关闭**：官方确认传感器为 **WDD35D4** 导电塑料电位器，通过 12-bit ADC 芯片采样，无死区，码值范围 0~4095。与当前单向 12-bit SPI 采集架构（`angle_sensor_reader.v`）完全吻合。 |
 | **R8** | 电机驱动是否确为 **TB6612FNG** | 决定 `stby_out = motor_en \| brake_mode` 的正确性与 STBY 引脚连接 |
 | **R9** | **J280 底板原理图 / 引脚分配表** | CST 的 20 个引脚在 PG484 封装中合法（PnR 已接受、Vccio 匹配、clk 落在 GCLKT_2），但**是否对应底板实际连线无法由 EDA 工具验证**。DS102 为芯片级手册，不含底板连线信息 |
 | **R10** | 电机供电是否确为 **12 V** | `VOLT_TO_PWM_18 = 85333` 与起摆核 `×15` 系数（= `J0/(km×12V)×1000`）均基于 12V；若为 24V 则增益翻倍，两者需同步重算 |

@@ -10,18 +10,18 @@ from dataclasses import dataclass
 @dataclass
 class PendulumConfig:
     # ==================== 1. 机械结构参数 (Mechanical Parameters) ====================
-    # 水平旋转臂 (Rotary Arm)
-    L1: float = 0.15          # 水平转臂轴心到摆杆转轴的有效回转半径 (m)
-    m1: float = 0.15          # 水平转臂及传感器附件质量 (kg)
-    J1: float = 0.001125      # 转臂绕电机轴的转动惯量 J1 = (1/3)*m1*L1^2 (kg*m^2)
+    # 水平旋转臂 (Rotary Arm) - 对标 J280 套件官方 FAQ 实测参数 (长 15.2cm, 宽 3.6cm, 重 90g)
+    L1: float = 0.152         # 水平转臂轴心到摆杆转轴的有效回转半径 (m)
+    m1: float = 0.090         # 水平转臂质量 (kg)
+    J1: float = 0.000693      # 转臂绕电机轴的转动惯量 J1 = (1/3)*m1*L1^2 (kg*m^2)
     b1: float = 0.0010        # 转臂机械轴承黏性摩擦系数 (N*m*s/rad)
     coulomb_tau: float = 0.0020 # 转臂机械轴承库仑摩擦力矩 (N*m)
 
-    # 垂直摆杆 (Inverted Pendulum)
-    L2: float = 0.20          # 摆杆全长 (m)
-    l2: float = 0.10          # 摆杆转轴到质心的距离 l2 = L2 / 2 (m)
-    m2: float = 0.050         # 摆杆质量 (kg)
-    Jp: float = 0.000667      # 摆杆绕转轴的转动惯量 Jp = (1/3)*m2*L2^2 (kg*m^2)
+    # 垂直摆杆 (Inverted Pendulum) - 对标 J280 套件官方 FAQ 实测参数 (长 15cm, 宽 3.4cm, 重 90g)
+    L2: float = 0.150         # 摆杆全长 (m)
+    l2: float = 0.075         # 摆杆转轴到质心的距离 l2 = L2 / 2 (m)
+    m2: float = 0.090         # 摆杆质量 (kg)
+    Jp: float = 0.000675      # 摆杆绕转轴的转动惯量 Jp = (1/3)*m2*L2^2 (kg*m^2)
     b2: float = 0.00010       # 摆杆转轴角度传感器阻尼系数 (N*m*s/rad)
 
     # 重力加速度
@@ -64,10 +64,10 @@ class PendulumConfig:
     # 状态权重矩阵 Q 与控制输入权重 R
     # 状态向量 x = [theta (摆角误差), dtheta (摆角速度), alpha (转臂位移误差), dalpha (转臂角速度), alpha_int (位移积分误差)]
     q_theta: float = 60.0     # 倒立摆直立角度误差惩罚 (最高优先级)
-    q_dtheta: float = 6.0     # 倒立摆角速度惩罚
-    q_alpha: float = 12.0     # 水平转臂位置误差惩罚
-    q_dalpha: float = 3.0     # 水平转臂角速度惩罚
-    q_alpha_int: float = 2.0  # 水平转臂积分误差惩罚 (消除静差)
+    q_dtheta: float = 16.0    # 倒立摆角速度惩罚 (针对 90g 重摆杆阻尼匹配，消除捕获过冲)
+    q_alpha: float = 25.0     # 水平转臂位置误差惩罚 (强化刚度，克服 0.25V 电机死区)
+    q_dalpha: float = 4.0     # 水平转臂角速度惩罚 (抑制前冲振荡)
+    q_alpha_int: float = 8.0  # 水平转臂积分误差惩罚 (快速消除静差，K5 = -4.0)
     alpha_int_limit: float = 0.25 # 抗积分饱和积分限幅 (rad)
     r_u: float = 0.50         # 控制电压能量消耗惩罚
 
