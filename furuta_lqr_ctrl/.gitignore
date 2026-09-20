@@ -1,0 +1,16 @@
+# Gowin EDA compilation outputs
+impl/
+*.gprj.user
+*.fs
+*.bin
+*.log
+
+# ModelSim temporary outputs
+# 唯一回归入口: sim_modelsim/run_all.bat (先 do compile.do，再为每个 TB 启动独立 vsim 进程)
+sim_modelsim/work/
+sim_modelsim/transcript
+sim_modelsim/*.ini
+sim_modelsim/*.wlf
+sim_modelsim/*.log
+__pycache__/
+*.pyc

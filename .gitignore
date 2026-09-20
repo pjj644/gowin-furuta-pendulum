@@ -4,16 +4,23 @@ __pycache__/
 *$py.class
 .pytest_cache/
 
-# RTL 主仓库：一个**嵌套的独立 git 仓库**，由它自己的 git 管理（16+ 个提交的五轮迭代历史）。
-# 切勿 `git add furuta_lqr_ctrl`：那会把它变成一个 gitlink（伪 submodule），
-# 克隆本文档仓库的人只会得到一个空目录，且 RTL 历史无法随之传递。
-furuta_lqr_ctrl/
+# EDA build and simulation outputs
+furuta_lqr_ctrl/impl/
+furuta_lqr_ctrl/sim_modelsim/work/
+furuta_lqr_ctrl/sim_modelsim/transcript
+furuta_lqr_ctrl/sim_modelsim/*.log
+furuta_lqr_ctrl/sim_modelsim/*.wlf
+furuta_lqr_ctrl/sim_modelsim/*.ini
+!furuta_lqr_ctrl/sim_modelsim/modelsim.ini
+furuta_lqr_ctrl/sim_modelsim/*.vstf
+furuta_lqr_ctrl/*.fs
+furuta_lqr_ctrl/*.bin
+furuta_lqr_ctrl/*.log
+furuta_lqr_ctrl/*.gprj.user
 
-# EDA 工具在非 ASCII 路径下无法工作，故通过一个纯 ASCII 的 NTFS junction 访问本仓库。
-# junction 由 furuta_lqr_ctrl/eda.ps1 自动创建与维护，位置可用 $env:FPGA_ASCII_LINK 覆盖。
-# 详见 AGENTS.md §1.2 与 furuta_lqr_ctrl/eda.ps1 头部说明。
-
-# Temporary files
+# Temporary files & archives
 ~$*.xlsx
 *.zip
+ic coder/
+furuta_lqr_ctrl/.git*/
 

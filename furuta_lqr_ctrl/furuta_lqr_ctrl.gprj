@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE gowin-fpga-project>
+<Project>
+    <Template>FPGA</Template>
+    <Version>5</Version>
+    <Device name="GW2A-55C" pn="GW2A-LV55PG484C8/I7">gw2a55c-005</Device>
+    <FileList>
+        <File path="src/furuta_lqr_ctrl.v" type="file.verilog" enable="1"/>
+        <File path="src/motor_pwm_driver.v" type="file.verilog" enable="1"/>
+        <File path="src/encoder_quad_reader.v" type="file.verilog" enable="1"/>
+        <File path="src/angle_sensor_reader.v" type="file.verilog" enable="1"/>
+        <File path="src/swing_up_ctrl.v" type="file.verilog" enable="1"/>
+        <File path="src/traj_gen.v" type="file.verilog" enable="1"/>
+        <File path="src/ctrl_fsm.v" type="file.verilog" enable="1"/>
+        <File path="src/j280_hw_top.v" type="file.verilog" enable="1"/>
+        <File path="src/furuta_hil_tb.v" type="file.verilog" enable="0"/>
+        <File path="src/furuta_lqr_ctrl_tb.v" type="file.verilog" enable="0"/>
+        <File path="src/furuta_plant_model.v" type="file.verilog" enable="0"/>
+        <File path="src/j280_hw_top_tb.v" type="file.verilog" enable="0"/>
+        <File path="src/swing_up_ctrl_tb.v" type="file.verilog" enable="0"/>
+        <File path="src/furuta_lqr_ctrl.cst" type="file.cst" enable="1"/>
+        <File path="src/furuta_lqr_ctrl.sdc" type="file.sdc" enable="1"/>
+    </FileList>
+</Project>

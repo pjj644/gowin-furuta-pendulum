@@ -1,0 +1,105 @@
+// =============================================================================
+// 全国大学生嵌入式芯片与系统设计竞赛 - 选题一 (J280 姿态控制系统竞赛套件)
+// 物理约束文件 (Physical Constraints File: .cst)
+// 目标器件: 高云半导体 (Gowin) GW2A-55C (GW2A-LV55PG484C8/I7)
+// 顶层模块: j280_hw_top
+// 数据手册参考: DS102-2.7.8_GW2A系列FPGA产品数据手册.pdf
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// 1. 系统时钟与硬件复位
+// -----------------------------------------------------------------------------
+// 板载 50MHz 有源晶振输入 (专用全局时钟 GCLK 引脚，Bank 2)
+IO_LOC "clk_50m" M19;
+IO_PORT "clk_50m" IO_TYPE=LVCMOS33 PULL_MODE=NONE;
+
+// 硬件复位按键 (低电平有效，Bank 6)
+IO_LOC "rst_n" U1;
+IO_PORT "rst_n" IO_TYPE=LVCMOS33 PULL_MODE=UP HYSTERESIS=HIGH;
+
+// -----------------------------------------------------------------------------
+// 2. 核心板拨码开关与按键 (用户交互通道)
+// -----------------------------------------------------------------------------
+// 拨码开关 SW1: 电机使能 (1: 运行, 0: 安全停机)
+IO_LOC "sw_motor_en" T2;
+IO_PORT "sw_motor_en" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+
+// 拨码开关 SW2: 停机刹车模式 (1: 动态能耗制动, 0: 自由滑行)
+IO_LOC "sw_brake_mode" R2;
+IO_PORT "sw_brake_mode" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+
+// 独立按键 KEY1: 摆杆垂直零点自适应标定 (低电平有效)
+IO_LOC "key_zero_calib" V5;
+IO_PORT "key_zero_calib" IO_TYPE=LVCMOS33 PULL_MODE=UP HYSTERESIS=HIGH;
+
+// 独立按键 KEY2: 转臂绝对位置积分清零 (低电平有效)
+IO_LOC "key_pos_clear" V4;
+IO_PORT "key_pos_clear" IO_TYPE=LVCMOS33 PULL_MODE=UP HYSTERESIS=HIGH;
+
+// -----------------------------------------------------------------------------
+// 3. 核心板状态指示 LED (低电平点亮)
+// -----------------------------------------------------------------------------
+// LED1: 倒立摆进入垂直自平衡区指示灯 (倾角误差 < 22度)
+IO_LOC "led_balance" N4;
+IO_PORT "led_balance" IO_TYPE=LVCMOS33 DRIVE=8 PULL_MODE=NONE;
+
+// LED2: 摆杆零位已完成标定指示灯
+IO_LOC "led_calib_ok" N3;
+IO_PORT "led_calib_ok" IO_TYPE=LVCMOS33 DRIVE=8 PULL_MODE=NONE;
+
+// LED3: 电机动力输出指示灯 (PWM 输出有效)
+IO_LOC "led_motor_run" M5;
+IO_PORT "led_motor_run" IO_TYPE=LVCMOS33 DRIVE=8 PULL_MODE=NONE;
+
+// -----------------------------------------------------------------------------
+// 4. 直流电机驱动接口 (TB6612FNG / A4950 H桥)
+// -----------------------------------------------------------------------------
+// 20kHz PWM 调速脉冲输出
+IO_LOC "motor_pwm" H19;
+IO_PORT "motor_pwm" IO_TYPE=LVCMOS33 DRIVE=8 PULL_MODE=NONE;
+
+// 电机旋转方向 DIR 输出
+IO_LOC "motor_dir" H18;
+IO_PORT "motor_dir" IO_TYPE=LVCMOS33 DRIVE=8 PULL_MODE=NONE;
+
+// H 桥驱动 IN1 控制信号
+IO_LOC "motor_in1" G17;
+IO_PORT "motor_in1" IO_TYPE=LVCMOS33 DRIVE=8 PULL_MODE=NONE;
+
+// H 桥驱动 IN2 控制信号
+IO_LOC "motor_in2" G18;
+IO_PORT "motor_in2" IO_TYPE=LVCMOS33 DRIVE=8 PULL_MODE=NONE;
+
+// TB6612 STBY 待机使能引脚 (高电平使能工作)
+IO_LOC "motor_stby" F18;
+IO_PORT "motor_stby" IO_TYPE=LVCMOS33 DRIVE=8 PULL_MODE=NONE;
+
+// -----------------------------------------------------------------------------
+// 5. 电机正交光电编码器接口 (1000 线 / 4000 CPR)
+// -----------------------------------------------------------------------------
+// 编码器 A 相输入 (内部弱上拉，施密特迟滞消抖)
+IO_LOC "enc_a" J19;
+IO_PORT "enc_a" IO_TYPE=LVCMOS33 PULL_MODE=UP HYSTERESIS=HIGH;
+
+// 编码器 B 相输入 (内部弱上拉，施密特迟滞消抖)
+IO_LOC "enc_b" K19;
+IO_PORT "enc_b" IO_TYPE=LVCMOS33 PULL_MODE=UP HYSTERESIS=HIGH;
+
+// 编码器 Z 相零位脉冲输入 (可选索引)
+IO_LOC "enc_z" L19;
+IO_PORT "enc_z" IO_TYPE=LVCMOS33 PULL_MODE=UP HYSTERESIS=HIGH;
+
+// -----------------------------------------------------------------------------
+// 6. 摆杆角度传感器 SPI 接口 (12位高精度 ADC / 磁编码器)
+// -----------------------------------------------------------------------------
+// SPI 片选信号 CS_N (低有效，空闲上拉)
+IO_LOC "adc_cs_n" E19;
+IO_PORT "adc_cs_n" IO_TYPE=LVCMOS33 DRIVE=8 PULL_MODE=UP;
+
+// SPI 串行同步时钟 SCLK (2.5MHz)
+IO_LOC "adc_sclk" E20;
+IO_PORT "adc_sclk" IO_TYPE=LVCMOS33 DRIVE=8 PULL_MODE=NONE;
+
+// SPI 串行数据输入 MISO (内部弱上拉防浮空，施密特迟滞)
+IO_LOC "adc_miso" F19;
+IO_PORT "adc_miso" IO_TYPE=LVCMOS33 PULL_MODE=UP HYSTERESIS=HIGH;
