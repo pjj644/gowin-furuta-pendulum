@@ -12,3 +12,8 @@ furuta_lqr_ctrl/
 # EDA 工具在非 ASCII 路径下无法工作，故通过一个纯 ASCII 的 NTFS junction 访问本仓库。
 # junction 由 furuta_lqr_ctrl/eda.ps1 自动创建与维护，位置可用 $env:FPGA_ASCII_LINK 覆盖。
 # 详见 AGENTS.md §1.2 与 furuta_lqr_ctrl/eda.ps1 头部说明。
+
+# Temporary files
+~$*.xlsx
+*.zip
+
