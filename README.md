@@ -3,9 +3,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![FPGA](https://img.shields.io/badge/FPGA-Gowin%20GW2A--55C-orange.svg)](http://www.gowinsemi.com.cn/)
 [![Language](https://img.shields.io/badge/Language-Verilog--2001%20%7C%20Python-green.svg)]()
-[![ModelSim Tests](https://img.shields.io/badge/ModelSim%20Regression-78%2F78%20PASS-brightgreen.svg)]()
+[![ModelSim Tests](https://img.shields.io/badge/ModelSim%20Regression-77%2F77%20PASS-brightgreen.svg)]()
 [![HIL Closed-Loop](https://img.shields.io/badge/HIL%20Closed--Loop-10%2F10%20PASS-success.svg)]()
-[![Timing Slack](https://img.shields.io/badge/Timing%20Fmax-56.9~63.7%20MHz%20(No%20Violations)-blue.svg)]()
+[![Timing Slack](https://img.shields.io/badge/Timing%20Fmax-56.9%20MHz%20(No%20Violations)-blue.svg)]()
 
 > **2026 年全国大学生嵌入式芯片与系统设计竞赛 · FPGA 创新设计赛道 · 选题一：基于 FPGA 的实时姿态控制系统**  
 > 适配硬件：J280 姿态控制系统竞赛套件（水平旋转臂 + 垂直摆杆） + 高云 **GW2A-LV55PG484C8/I7**（GW2A-55C）核心板。
@@ -92,7 +92,7 @@ sw_motor_en (使能) ─►│                                      │   · fur
 | **拓展要求 1** | 水平转臂定点伺服控制 | 平滑到达 $+45^\circ$，稳态静差 $< 0.20^\circ$ | **稳态静差仅 $0.0303^\circ$（设计裕量高达 85%）** | ✅ **PASS** |
 | **拓展要求 2** | 动态连续正弦轨迹跟踪 | 跟踪 $0.2\text{Hz}$ 正弦 5 秒，摆杆直立平衡 | **RMS 误差 $3.8563^\circ < 10.0^\circ$，$\|\theta\|$ 峰值 $1.632^\circ < 8.0^\circ$** | ✅ **PASS** |
 | **拓展要求 3** | 运动过程中姿态平稳度 | 移动全程摆杆始终保持直立 | **移动全过程摆杆偏角 $\|\theta\| \le 4.012^\circ$** | ✅ **PASS** |
-| **时序性能** | 高云 FPGA 50MHz 时钟约束 | Setup / Hold 零违例，裕量充足 | **Fmax = 56.9 ~ 63.7 MHz，Setup Slack 3.96 ~ 4.30 ns** | ✅ **PASS** |
+| **时序性能** | 高云 FPGA 50MHz 时钟约束 | Setup / Hold 零违例，裕量充足 | **Fmax = 56.928 MHz，Setup Slack 2.434 ns（违例 0/0，裕量 12.2%）** | ✅ **PASS** |
 
 ---
 
@@ -122,10 +122,10 @@ python test_suite.py
   全国大学生嵌入式芯片与系统设计竞赛 - 选题一物理仿真自动测试 (强化版)
 ======================================================================
 [TEST 1] 运行物理动力学无阻尼自由摆动测试...       [PASS]
-[TEST 2] 运行下垂起摆与倒立自平衡测试...           [PASS] (在 t = 3.982s 成功切入平衡)
-[TEST 3] 运行抗外力推力扰动测试...                 [PASS] (恢复耗时 0.020s)
-[TEST 4] 运行转臂定点位置伺服控制测试...           [PASS] (静差 0.1577 deg)
-[TEST 5] 运行连续正弦轨迹与速度跟踪测试...         [PASS] (RMS 误差 4.60 deg)
+[TEST 2] 运行下垂起摆与倒立自平衡测试...           [PASS] (在 t = 3.926s 成功切入平衡)
+[TEST 3] 运行抗外力推力扰动测试...                 [PASS] (恢复耗时 0.021s)
+[TEST 4] 运行转臂定点位置伺服控制测试...           [PASS] (静差 0.0553 deg)
+[TEST 5] 运行连续正弦轨迹与速度跟踪测试...         [PASS] (RMS 误差 4.58 deg)
 [TEST 6] 运行 FPGA Q12.16 逐比特定点等效性测试...  [PASS] (最大漂移 0.0777 deg)
 🎉 全部 6 项核心测试全部通过！系统算法与硬件仿真完全达标！
 ```
@@ -142,7 +142,7 @@ cd furuta_lqr_ctrl
 ```
 
 **双重校验退出码机制**：
-- `$LASTEXITCODE = 0`：所有 5 步全部成功，78 项断言全部 PASS；
+- `$LASTEXITCODE = 0`：所有 5 步全部成功，77 项断言全部 PASS；
 - `$LASTEXITCODE = 1`：有判据失败（拒绝假绿）；
 - `$LASTEXITCODE = 2`：仿真进程崩溃。
 
@@ -152,7 +152,7 @@ cd furuta_lqr_ctrl
   VERDICT SUMMARY
 ================================================================
   Step 1 compile          : see _s1.log  (13 个 vlog 全部 Errors: 0, Warnings: 0)
-  Step 2 swing_up_ctrl_tb : see _s2.log  (53 用例全部 [ALL PASS])
+  Step 2 swing_up_ctrl_tb : see _s2.log  (52 用例全部 [ALL PASS])
   Step 3 j280_hw_top_tb   : see _s3.log  (9 PASS / 0 FAIL / ALL PASSED)
   Step 4 furuta_lqr_ctrl  : see _s4.log  (6 PASS / 0 FAIL / 100% 通过)
   Step 5 furuta_hil_tb    : see _s5.log  (10 PASS / 0 FAIL / HIL RESULT: PASS 10/10)
